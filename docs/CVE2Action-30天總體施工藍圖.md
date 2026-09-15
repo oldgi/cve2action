@@ -4,7 +4,7 @@
 
 | 文件欄位 | 內容 |
 |---|---|
-| 文件版本 | 0.1.0 |
+| 文件版本 | 0.1.1 |
 | 基線日期 | 2026-09-15 |
 | 文件狀態 | Baseline |
 | 專案代號 | CVE2Action |
@@ -46,6 +46,9 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 ### 4.1 MVP 包含
 
 - CSV/JSON 弱掃結果匯入。
+- 多 IP、Hostname、MAC 與 Virtual IP 的資產歸併。
+- 漏洞適用性狀態與版本證據管理。
+- Service、Port、Zone、ACL 與帳號狀態的有效可達性判斷。
 - NVD CVE/CVSS、FIRST EPSS、CISA KEV 資料補充。
 - CVSS v3.1 與 v4.0 的共同正規化格式。
 - 資產重要性、資料敏感度、暴露面與控制資料。
@@ -69,24 +72,26 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 30 天結束時，專案必須能以一份模擬弱掃檔完成下列流程：
 
 1. 匯入 40 筆以上的弱點發現。
-2. 為每筆資料補上 CVSS、EPSS 與 KEV 狀態。
-3. 同時呈現 CVSS 排名與 CRPS 排名。
-4. 對每個分數說明來源、加減分及資料缺口。
-5. 找出至少一條從 Internet 到 Crown Jewel 的有效路徑。
-6. 比較 Patch、隔離與關閉連線等措施。
-7. 重算措施後的分數及剩餘攻擊路徑。
-8. 輸出修補優先清單。
-9. 提供可重現的安裝方式與自動測試。
+2. 將同一設備的多個掃描介面歸併為穩定資產。
+3. 將適用性不足的項目標為 `REVIEW_REQUIRED` 或 `NOT_APPLICABLE`。
+4. 為每筆資料補上 CVSS、EPSS 與 KEV 狀態。
+5. 同時呈現 CVSS 排名與 CRPS 排名。
+6. 對每個分數說明來源、加減分及資料缺口。
+7. 找出至少一條從 Internet 到 Crown Jewel 的有效路徑。
+8. 比較 Patch、隔離與關閉連線等措施。
+9. 重算措施後的分數及剩餘攻擊路徑。
+10. 輸出修補優先清單，且重複觀測只形成一項修補工作。
+11. 提供可重現的安裝方式與自動測試。
 
 ## 6. 最終系統架構
 
 ```mermaid
 flowchart TD
-    A["弱掃結果／資產／拓樸"] --> B["資料匯入與正規化"]
-    X["NVD／EPSS／CISA KEV"] --> B
-    B --> C["情境與威脅情報資料庫"]
-    C --> D["風險評分引擎"]
-    C --> E["攻擊路徑引擎"]
+    A["掃描觀測／資產介面"] --> B["歸併與適用性閘門"]
+    X["NVD／EPSS／CISA KEV"] --> C["情境與威脅情報資料庫"]
+    B --> C
+    C --> D["有效可達性與風險評分"]
+    C --> E["條件式攻擊路徑引擎"]
     D --> F["修補決策引擎"]
     E --> F
     F --> G["API／儀表板／報告"]
@@ -94,13 +99,15 @@ flowchart TD
 
 ### 6.1 處理流程
 
-1. **Collect**：接收弱掃、資產與拓樸資料，取得公開威脅情報。
-2. **Normalize**：統一 CVE、CVSS 版本、資產 ID、區域與時間欄位。
-3. **Enrich**：補上 EPSS、KEV、資產重要性、暴露面與控制措施。
-4. **Score**：計算 Likelihood、Impact、Attack Path、Control 及 CRPS。
-5. **Graph**：建立網路、服務、帳號與權限關係，搜尋有效路徑。
-6. **Recommend**：產生修補選項，計算成本與預期風險降低。
-7. **Explain**：顯示排序理由、假設、缺失資料與信心程度。
+1. **Collect**：保存原始弱掃觀測、資產介面與拓樸資料，取得公開威脅情報。
+2. **Resolve**：將多個 IP、Hostname、MAC 與 Virtual IP 歸併至穩定 `asset_id`。
+3. **Validate**：依版本、Build、Package、Backport、模組與設定證據判斷漏洞適用性。
+4. **Reachability**：結合 Zone、Service、Port、ACL、帳號與控制判斷有效可達性。
+5. **Enrich**：補上 EPSS、KEV、資產重要性、暴露面與控制措施。
+6. **Score**：計算 Likelihood、Impact、Attack Path、Control 及 CRPS。
+7. **Graph**：建立網路、服務、帳號與權限關係，檢查路徑前置條件。
+8. **Recommend**：歸併修補工作並計算候選措施的成本與預期風險降低。
+9. **Explain**：顯示排序理由、假設、缺失資料、信心程度與人工覆核狀態。
 
 ## 7. 技術選型
 
@@ -141,10 +148,15 @@ LLM 只可用於把既有計算結果轉成自然語言說明；核心分數、�
 | 檔案 | 核心欄位 | 用途 |
 |---|---|---|
 | `assets.csv` | asset_id、type、zone、owner、criticality | 資產與營運情境 |
-| `findings.csv` | finding_id、asset_id、cve_id、port、detected_at | 模擬弱掃結果 |
+| `asset_interfaces.csv` | asset_id、ip、hostname、mac、interface_type | 多介面資產歸併 |
+| `finding_observations.csv` | observation_id、target、cve_id、port、detected_at | 保存原始掃描觀測 |
+| `findings.csv` | finding_id、asset_id、cve_id、applicability、confidence | 歸併與適用性判斷結果 |
+| `services.csv` | asset_id、port、service、version、state | 有效攻擊面 |
+| `version_evidence.csv` | finding_id、observed_version、actual_version、evidence | 子版本與修補證據 |
 | `cve_snapshot.json` | cve_id、cvss、vector、cwe、description | 固定版公開 CVE 資料 |
 | `threat_intel.csv` | cve_id、epss、percentile、kev、poc | 威脅與利用狀態 |
 | `network_edges.csv` | source、target、port、protocol、allowed | 網路可達關係 |
+| `network_policies.csv` | source_scope、destination、port、action、verified_at | ACL 與正向列表 |
 | `identity_edges.csv` | account、source、target、privilege | 權限及橫向移動條件 |
 | `controls.csv` | asset_id、control_type、effectiveness | WAF、EDR、ACL 等控制 |
 | `business_context.csv` | asset_id、data_class、impact、rto | 業務衝擊 |
@@ -163,6 +175,17 @@ LLM 只可用於把既有計算結果轉成自然語言說明；核心分數、�
 ## 9. 風險模型 v0.1
 
 所有輸入值正規化為 0–1。
+
+### 9.0 評分前置閘門
+
+原始 Finding 不得直接進入 CRPS。系統先依序執行：
+
+1. 資產歸併：重複 IP 觀測合併到同一資產與修補工作。
+2. 漏洞適用性：標示 `CONFIRMED`、`LIKELY`、`UNKNOWN` 或 `NOT_APPLICABLE`。
+3. 有效可達性：確認 Zone、Service、Port、ACL、帳號與控制的實際狀態。
+4. 路徑前置條件：確認網路、權限及後續節點能否串成有效路徑。
+
+`UNKNOWN` 或缺少關鍵情境資料者標為 `REVIEW_REQUIRED`，不得以零值取代未知；`NOT_APPLICABLE` 不進入修補排序，但保留證據與判定理由。
 
 ### 9.1 遭利用可能性
 
@@ -236,7 +259,7 @@ CRPS=100\times L^{0.45}\times I^{0.35}\times \max(A,0.05)^{0.20}\times(1-0.6C)
 
 | Day | 文章題目 | 系統或資料產出 | 當日驗收重點 |
 |---:|---|---|---|
-| 1 | 弱掃報告為什麼愈來愈厚，風險卻沒有變清楚？ | 問題陳述 | 三個核心問題明確 |
+| 1 | 一份沒人看的弱掃報告 | 問題陳述與五個真實缺口 | Finding 不等於修補工作 |
 | 2 | CVSS 9.8，真的就該第一個修嗎？ | 兩個反例 | 可說明嚴重度不等於優先度 |
 | 3 | 嚴重度、威脅與風險，其實是三件事 | 名詞模型 | 名詞定義一致 |
 | 4 | 一個漏洞要加入哪些企業情境？ | 因子清單 | 每個因子有資料來源 |
@@ -336,6 +359,7 @@ cve2action/
 | 版本 | 里程碑 |
 |---|---|
 | `v0.1.0-blueprint` | 施工藍圖基線 |
+| `v0.1.1-context-gates` | 評分前置閘門與 Day 1 草稿 |
 | `v0.2.0-data` | Day 10，資料管線與模擬資料 |
 | `v0.3.0-scoring` | Day 18，評分與解釋 |
 | `v0.4.0-attack-graph` | Day 24，攻擊路徑 |
@@ -437,4 +461,3 @@ ADR 必須包含背景、決策、理由、替代方案與後果。
 > 《CVE2Action：30 天每日施工卡與驗收清單》
 
 每日施工卡必須把本藍圖的每日列項拆成可在當天完成的任務、測試、文章素材及縮減方案，不再擴張 MVP 邊界。
-
