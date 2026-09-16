@@ -8,16 +8,20 @@
 
 - [30 天總體施工藍圖](docs/CVE2Action-30天總體施工藍圖.md)
 - [架構決策 ADR-0001：專案定位](docs/decisions/ADR-0001-專案定位.md)
+- [架構決策 ADR-0003：條件式行動決策](docs/decisions/ADR-0003-條件式行動決策.md)
 - [Day 1：一份沒人看的弱掃報告](docs/articles/day-01.md)
 - [Day 2：CVSS 9.8，真的就該第一個修嗎？](docs/articles/day-02.md)
 - [Day 2 案例設計與查核備忘錄](docs/research/day-02-case-design.md)
+- [Day 2 修訂包與手動更新說明](docs/releases/day-02-revision-MANIFEST.md)
 - [版本紀錄](CHANGELOG.md)
 
 ## 目前版本
 
 - 版本：`0.1.2`
-- 狀態：Day 1 發布候選版
-- 日期：2026-09-15
+- 狀態：Day 1 已發文；Day 2 修訂稿待審（Unreleased）
+- 最近修訂：2026-09-16
+
+Day 2 靜態資料契約版本為 `0.2.0`，與專案發行版本分開。可用 `python scripts/validate_day02.py` 檢查資料一致性；此檢查不代表已實作風險計算引擎。
 
 ## 專案定位
 

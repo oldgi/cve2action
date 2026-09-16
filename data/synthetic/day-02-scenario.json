@@ -1,0 +1,17 @@
+{
+  "scenario_id": "DAY02-HISTORICAL-20220603",
+  "schema_version": "0.2.0",
+  "synthetic_environment": true,
+  "scenario_as_of": "2022-06-03T23:00:00-07:00",
+  "scenario_timezone": "America/Los_Angeles",
+  "authored_on": "2026-09-16",
+  "knowledge_policy": "Historical teaching reconstruction, not an archived intelligence snapshot. Decisions use advisory facts available by scenario_as_of. CVSS labels are normalized from sources consulted during authoring; exact historical score publication timestamps are not reconstructed.",
+  "control_evidence_max_age_calendar_days": 7,
+  "control_evidence_age_policy": "Use scenario-local dates. Age 7 remains in range; age 8 requires review. Freshness never proves test coverage or effectiveness.",
+  "deadline_policy": "Date-only deadlines mean scenario-local end of day. A's 2022-06-16 SLA is a synthetic internal target, not a CISA deadline or approved acceptance. B's 2022-06-03 is the mitigation target, not its patch deadline.",
+  "missing_values": "Blank means unknown or unset, never zero, false, approved or unlimited validity. NOT_APPLICABLE denotes an inapplicable acceptance workflow; legacy n/a text is retained where present.",
+  "asset_reachability_policy": "prod_reachability is an enum: true, false, conditional, unknown. It describes the source asset's outbound relationship in the scoped model, not whether PROD can receive any traffic. Never cast it as a boolean.",
+  "evidence_policy": "Inventory, ACL tests, proxy logs, EDR review, ownership, SLA and risk acceptance reference are fictional inputs. No actual logs or signed approvals are included.",
+  "patch_policy": "7.13.7 and 74.0.1 are historical fixes for specific CVEs on named branches, not recommended current deployment versions. Numeric >= is not a cross-branch applicability check.",
+  "artifact_status": "Reviewable article and static synthetic fixtures; no risk engine, live network test, approval, patch or publication has been executed."
+}
