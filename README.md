@@ -8,6 +8,9 @@
 
 - [30 天總體施工藍圖](docs/CVE2Action-30天總體施工藍圖.md)
 - [架構決策 ADR-0001：專案定位](docs/decisions/ADR-0001-專案定位.md)
+- [Day 1：一份沒人看的弱掃報告](docs/articles/day-01.md)
+- [Day 2：CVSS 9.8，真的就該第一個修嗎？](docs/articles/day-02.md)
+- [Day 2 案例設計與查核備忘錄](docs/research/day-02-case-design.md)
 - [版本紀錄](CHANGELOG.md)
 
 ## 目前版本

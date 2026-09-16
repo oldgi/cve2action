@@ -1,0 +1,5 @@
+asset_id,hostname,asset_type,zone,business_role,criticality,data_class,internet_egress,prod_reachability,notes
+AST-LAB-001,LAB-CONFLUENCE-01,server,ISOLATED_LAB,confluence_test,low,synthetic_test_data,false,false,"Service remains active for testing; inbound allowlist applies"
+AST-OPS-007,OPS-WS-07,workstation,USER_LAN,operations_workstation,high,internal,true,conditional,"Daily-use operations endpoint; can initiate login to ADMIN-JUMP-01"
+AST-JMP-001,ADMIN-JUMP-01,jump_server,MGMT,administration_gateway,critical,restricted,false,true,"Synthetic management jump server used only to model a conditional downstream path"
+AST-CJ-001,CORE-SERVICE-01,server,PROD,crown_jewel,critical,restricted,false,false,"Synthetic crown jewel; no direct path from either finding asset"
