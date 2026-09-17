@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+<title>嚴重度、威脅與企業情境如何形成風險判斷</title>
+<desc>三類資訊共同形成情境評估，考量事件可能性與直接及擴散損失，得出既有控制下的剩餘風險。不是分數相乘公式。</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#7a899b"/></marker></defs>
+<rect width="1600" height="1100" fill="#ffffff"/>
+<g font-family="Noto Sans TC, sans-serif" fill="#20334b" text-anchor="middle">
+<text x="800" y="55" font-size="23" letter-spacing="3">CVE2Action · DAY 03</text>
+<text x="800" y="114" font-size="42" font-weight="bold">嚴重度、威脅與風險，如何接起來？</text>
+<rect x="65" y="160" width="455" height="185" rx="18" fill="#fff4f4" stroke="#bd4350" stroke-width="2"/>
+<text x="292" y="207" font-size="32" font-weight="bold">嚴重度 Severity</text>
+<text x="292" y="254" font-size="26">漏洞的利用條件與技術衝擊</text>
+<text x="292" y="302" font-size="23" fill="#68768a">鎖的缺陷，不是失竊機率</text>
+<rect x="572" y="160" width="455" height="185" rx="18" fill="#fff8ed" stroke="#bd9143" stroke-width="2"/>
+<text x="800" y="207" font-size="32" font-weight="bold">威脅 Threat</text>
+<text x="800" y="254" font-size="26">可能造成傷害的來源與事件</text>
+<text x="800" y="302" font-size="23" fill="#68768a">利用工具、攻擊活動等線索</text>
+<rect x="1080" y="160" width="455" height="185" rx="18" fill="#edf3f9" stroke="#647e9f" stroke-width="2"/>
+<text x="1307" y="207" font-size="32" font-weight="bold">企業情境與控制</text>
+<text x="1307" y="254" font-size="26">資產、暴露、權限與路徑</text>
+<text x="1307" y="302" font-size="23" fill="#68768a">防護須有範圍、證據與時效</text>
+<g stroke="#7a899b" stroke-width="3" fill="none" marker-end="url(#arrow)">
+<path d="M292 345 V380 Q292 400 315 400 H590 V429"/>
+<path d="M800 345 V429"/>
+<path d="M1307 345 V380 Q1307 400 1285 400 H1010 V429"/>
+</g>
+<rect x="395" y="440" width="810" height="95" rx="16" fill="#20334b"/>
+<text x="800" y="480" font-size="29" fill="white" font-weight="bold">放進同一個情境，查核成立條件</text>
+<text x="800" y="515" font-size="22" fill="#e0e8f0">指定時間與範圍；區分已知、假設及未知</text>
+<g stroke="#7a899b" stroke-width="3" fill="none" marker-end="url(#arrow)">
+<path d="M595 535 V565 H435 V600"/>
+<path d="M1005 535 V565 H1165 V600"/>
+</g>
+<rect x="175" y="610" width="520" height="135" rx="16" fill="#f4f6f9" stroke="#a5b2c2"/>
+<text x="435" y="655" font-size="31" font-weight="bold">事件發生的可能性</text>
+<text x="435" y="706" font-size="25">能否接觸、利用並造成損害？</text>
+<rect x="905" y="610" width="520" height="135" rx="16" fill="#f4f6f9" stroke="#a5b2c2"/>
+<text x="1165" y="655" font-size="31" font-weight="bold">可能的損失</text>
+<text x="1165" y="706" font-size="25">直接影響，以及後續擴散</text>
+<g stroke="#7a899b" stroke-width="3" fill="none" marker-end="url(#arrow)">
+<path d="M435 745 V785 H645 V815"/>
+<path d="M1165 745 V785 H955 V815"/>
+</g>
+<rect x="395" y="825" width="810" height="132" rx="18" fill="#fff4f4" stroke="#bd4350" stroke-width="2"/>
+<text x="800" y="873" font-size="34" font-weight="bold">風險 Risk</text>
+<text x="800" y="921" font-size="26">綜合可能性與損失，判斷既有控制下的剩餘風險</text>
+<text x="800" y="1014" font-size="24" fill="#68768a">箭頭表示評估依據，不是數值相乘；高分數不直接等於高企業風險。</text>
+<text x="800" y="1060" font-size="19" fill="#68768a">概念整理：CVE2Action　｜　參考 FIRST CVSS v3.1、NIST Risk／Threat 定義</text>
+</g></svg>
