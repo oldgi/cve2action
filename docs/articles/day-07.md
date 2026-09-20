@@ -12,6 +12,9 @@
 
 所以今天接 NVD。
 
+> **豆知識：NVD 是誰？**
+> National Vulnerability Database，美國 NIST 維運。CVE 編號其實不是它發的——那是 MITRE 主持的 CVE Program 在做；NVD 負責後半段：補上 CVSS 分數、CWE 分類與受影響版本範圍。CVE 給漏洞一張身分證，NVD 幫它做體檢報告。你弱掃報告上的那個分數，多半輾轉來自這裡。
+
 ## 接得到不難，接了還能重現才難
 
 ![collector](../images/day-07-collector.png)
