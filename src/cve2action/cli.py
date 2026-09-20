@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from . import __version__
+from .collectors.nvd import CVSS_UNKNOWN, DEFAULT_CACHE_DIR, NvdError, get_cve
 from .engine import rank
 from .io import InputError, read_asset_context, read_scanner, write_ranked_result
 from .models import DECISION_NEEDS_CONTEXT
@@ -29,11 +30,56 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rank_parser.add_argument("--rules", required=True, help="Decision Rule 設定 YAML")
     rank_parser.add_argument("--out", required=True, help="輸出 ranked_result.csv 路徑")
+
+    fetch_parser = subparsers.add_parser(
+        "fetch-cve", help="從 NVD 取得 CVE/CVSS 並寫成帶日期的快照"
+    )
+    fetch_parser.add_argument("cve_ids", nargs="*", help="CVE 編號，可給多個")
+    fetch_parser.add_argument("--from-scanner", help="改從 scanner.csv 讀取所有 CVE")
+    fetch_parser.add_argument("--cache-dir", default=str(DEFAULT_CACHE_DIR), help="快照目錄")
+    fetch_parser.add_argument(
+        "--refresh", action="store_true", help="忽略既有快照，重新向 NVD 取數"
+    )
     return parser
+
+
+def _run_fetch_cve(args) -> int:
+    cve_ids = list(args.cve_ids)
+    if args.from_scanner:
+        try:
+            findings = read_scanner(args.from_scanner)
+        except (InputError, FileNotFoundError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        seen = dict.fromkeys(f["cve"].strip() for f in findings if f.get("cve", "").strip())
+        cve_ids.extend(cve for cve in seen if cve not in cve_ids)
+
+    if not cve_ids:
+        print("error: no CVE ids given (pass ids or --from-scanner)", file=sys.stderr)
+        return 2
+
+    failures = 0
+    for cve_id in cve_ids:
+        try:
+            record, from_cache = get_cve(cve_id, cache_dir=args.cache_dir, refresh=args.refresh)
+        except NvdError as error:
+            # 取數失敗不得靜默略過，也不得當成「這個 CVE 沒風險」
+            print(f"  {cve_id:<18} FAILED   {error}", file=sys.stderr)
+            failures += 1
+            continue
+        origin = "cache" if from_cache else "nvd"
+        score = f"{record.base_score:>4}" if record.has_score else " n/a"
+        severity = record.severity if record.has_score else CVSS_UNKNOWN
+        print(f"  {record.cve_id:<18} {score}  {severity:<9} ({origin})")
+
+    print(f"{len(cve_ids) - failures}/{len(cve_ids)} resolved -> {args.cache_dir}")
+    return 1 if failures else 0
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "fetch-cve":
+        return _run_fetch_cve(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
