@@ -6,6 +6,13 @@
 
 ### Added
 
+- 建立 Python 專案骨架：`pyproject.toml`（uv 管理相依）、`src/cve2action/` 套件、pytest 測試、Ruff 設定與 GitHub Actions CI。
+- 實作 Decision Engine v0.1 Vertical Slice：`scanner.csv + asset_context.csv + risk_rules.yaml → ranked_result.csv`，含 CLI（`cve2action rank`）。
+- 權重與值域映射外部化至 `config/risk_rules.yaml`；載入時驗證權重和為 1、值域完整，且 `UNKNOWN` 控制不得降低曝險。
+- 缺少必要企業脈絡的 finding 標為 `NEEDS_CONTEXT`，不評分、不猜預設值，固定列於輸出最後。
+- 新增 Day 6 模擬資料（Northstar 虛構環境）與 22 個回歸測試，涵蓋 Day 5 Case A（6.25/Medium）、Case B（7.90/High）與無控制版（9.40/Critical）的排序翻轉基準。
+- 新增《Decision Engine v0.1 開發規格》（docs/architecture/decision-engine-v0.1-spec.md），凍結 I/O 契約、公式、值域與驗收案例。
+
 - 加入新版 Day 2 封面及使用者提供的重新排序內文圖，更新文章引用並說明圖中條件式排序的前提；保留原有主視覺以利回顧。
 - 新增 Day 2 固定歷史情境設定、CSV 一致性檢查與手動更新說明。
 - 新增 ADR-0003：決策輸出區分修補、緩解、審查與條件式暫緩。

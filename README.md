@@ -4,9 +4,24 @@
 
 這個儲存庫保存 2026 iThome 鐵人賽系列的總體施工藍圖、重要設計決策與後續版本紀錄。
 
+## 快速開始
+
+需求：Python 3.12+ 與 [uv](https://docs.astral.sh/uv/)。
+
+```bash
+uv sync
+uv run pytest
+uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv --context data/synthetic/day-06-asset-context.csv --rules config/risk_rules.yaml --out ranked_result.csv
+```
+
+輸出 `ranked_result.csv`：每筆 finding 附 Priority Score、分級與可解釋的 `reason`；
+缺少必要企業脈絡的項目標為 `NEEDS_CONTEXT`，不猜預設值。規格見
+[Decision Engine v0.1 開發規格](docs/architecture/decision-engine-v0.1-spec.md)。
+
 ## 文件入口
 
 - [30 天總體施工藍圖](docs/CVE2Action-30天總體施工藍圖.md)
+- [Decision Engine v0.1 開發規格](docs/architecture/decision-engine-v0.1-spec.md)
 - [架構決策 ADR-0001：專案定位](docs/decisions/ADR-0001-專案定位.md)
 - [架構決策 ADR-0003：條件式行動決策](docs/decisions/ADR-0003-條件式行動決策.md)
 - [Day 1：一份沒人看的弱掃報告](docs/articles/day-01.md)
@@ -17,9 +32,9 @@
 
 ## 目前版本
 
-- 版本：`0.1.2`
-- 狀態：Day 1 已發文；Day 2 修訂稿待審（Unreleased）
-- 最近修訂：2026-09-16
+- 版本：`0.2.0`（開發中）
+- 狀態：Day 1–5 文章完成；Decision Engine v0.1 Vertical Slice 開發中（Day 6）
+- 最近修訂：2026-09-20
 
 Day 2 靜態資料契約版本為 `0.2.0`，與專案發行版本分開。可用 `python scripts/validate_day02.py` 檢查資料一致性；此檢查不代表已實作風險計算引擎。
 
