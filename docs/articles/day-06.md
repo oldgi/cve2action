@@ -54,17 +54,11 @@ weights:
   exposure: 0.25   # E = Reachability × Control
   business: 0.25   # B = Business Impact
 
-reachability:
-  INTERNET: 1.0
-  INTERNAL: 0.6
-  ISOLATED: 0.2
-
 control_effectiveness:
-  NONE: 1.0
-  PARTIAL: 0.7
-  STRONG: 0.4
   UNKNOWN: 1.0   # 不知道，就不能假裝已有防護
 ```
+
+Reachability、Control、Business 的數值映射與 Day 5 訂的完全相同，一樣放在設定檔裡，這裡不重印。
 
 而且載入時就驗證，違反直接拒載：
 
@@ -106,9 +100,9 @@ cve2action rank \
 
 三件事值得看：
 
-**一、Day 5 的紙上推演，現在是可重跑的程式輸出。**
+**一、Day 5 的手算結果原樣重現。**
 
-Case A（9.8、隔離）= 6.25 Medium；Case B（8.8、對外核心）= 7.90 High。排序翻轉，數字分毫不差。
+第 3、4 名就是 Case B 與 Case A——7.90 與 6.25，和昨天紙上推演的數字分毫不差。排序翻轉，從推演變成可重跑的輸出。
 
 **二、每一列都說得出理由。**
 
