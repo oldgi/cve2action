@@ -6,6 +6,8 @@
 
 ### Added
 
+- 新增 NVD Collector（`cve2action fetch-cve`）：快照同時保存抽取欄位與原始回應，附來源網址與取得時間；預設讀快照可離線重跑，缺 v3.1 分數維持 UNKNOWN 不填零。
+- 新增 5 份帶日期的 NVD 快照（Day 6 模擬資料所用 CVE）與 12 個離線測試；實測發現 CVE-2022-41082 手填 8.8 與 NVD 8.0（AV:A/PR:L）不符，留待 Day 8 統一 CVSS 模型後修正。
 - 建立 Python 專案骨架：`pyproject.toml`（uv 管理相依）、`src/cve2action/` 套件、pytest 測試、Ruff 設定與 GitHub Actions CI。
 - 實作 Decision Engine v0.1 Vertical Slice：`scanner.csv + asset_context.csv + risk_rules.yaml → ranked_result.csv`，含 CLI（`cve2action rank`）。
 - 權重與值域映射外部化至 `config/risk_rules.yaml`；載入時驗證權重和為 1、值域完整，且 `UNKNOWN` 控制不得降低曝險。
