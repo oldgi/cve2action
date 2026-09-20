@@ -1,0 +1,35 @@
+# CVE2Action Decision Rules v0.1（baseline，不是標準答案）
+#
+# 依據：docs/articles/day-05.md 與 docs/decisions/ADR-day-05-decision-engine-v01.md
+# - 權重與映射外部化於此檔，不 hard-code；變更權重或門檻須新增/更新 ADR
+# - UNKNOWN 控制不得降低曝險（不知道，就不能假裝已有防護）
+# - Priority Score 僅用於排序與驗證，不宣稱事故機率或財務損失
+version: "0.1.0"
+
+# Priority Score = 10 × (severity×S + exposure×E + business×B)，權重和必須為 1
+weights:
+  severity: 0.50   # S = CVSS / 10
+  exposure: 0.25   # E = Reachability × Control Effectiveness
+  business: 0.25   # B = Business Impact
+
+reachability:
+  INTERNET: 1.0
+  INTERNAL: 0.6
+  ISOLATED: 0.2
+
+control_effectiveness:
+  NONE: 1.0
+  PARTIAL: 0.7
+  STRONG: 0.4
+  UNKNOWN: 1.0   # 必須 >= NONE，載入時強制檢查
+
+business_criticality:
+  CRITICAL: 1.0
+  IMPORTANT: 0.7
+  NORMAL: 0.4
+
+priority_bands:
+  - { label: Critical, floor: 9.0, ceiling: 10.0 }
+  - { label: High,     floor: 7.0, ceiling: 8.99 }
+  - { label: Medium,   floor: 4.0, ceiling: 6.99 }
+  - { label: Low,      floor: 0.0, ceiling: 3.99 }
