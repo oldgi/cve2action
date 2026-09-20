@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feature/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Tests (pytest)
+        run: uv run pytest -q
+
+      - name: Validate Day 2 static fixtures
+        run: uv run python scripts/validate_day02.py
+
+      - name: Smoke run decision engine on day-06 sample
+        run: >
+          uv run cve2action rank
+          --scanner data/synthetic/day-06-scanner.csv
+          --context data/synthetic/day-06-asset-context.csv
+          --rules config/risk_rules.yaml
+          --out ranked_result.csv
