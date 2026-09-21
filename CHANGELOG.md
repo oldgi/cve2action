@@ -6,6 +6,9 @@
 
 ### Added
 
+- 統一 CVSS 模型（`normalization/cvss.py`）：v3.1 與 v4.0 並存，每筆分數保留版本、vector、評分者與 Primary/Secondary，不做跨版本換算；版本偏好外部化至 `risk_rules.yaml`（`cvss.version_preference`），變更記錄於 ADR-day-08。
+- `cve2action rank --snapshots`：以 NVD 快照的分數取代掃描器手填值，輸出新增 `cvss_version`、`cvss_source`；不一致時 `reason` 註明 `scanner said`，NVD 未評分時退回掃描器值，皆無則 `NEEDS_CONTEXT`。
+- 快照改從 `raw` 重新解析，`fetch-cve --reparse` 可不重抓即更新投影；新增 CVE-2025-21590（v3.1/v4.0 並存）與 CVE-2024-6242（僅 v4.0）快照、Day 8 模擬資料與 36 個測試。
 - 新增 NVD Collector（`cve2action fetch-cve`）：快照同時保存抽取欄位與原始回應，附來源網址與取得時間；預設讀快照可離線重跑，缺 v3.1 分數維持 UNKNOWN 不填零。
 - 新增 5 份帶日期的 NVD 快照（Day 6 模擬資料所用 CVE）與 12 個離線測試；實測發現 CVE-2022-41082 手填 8.8 與 NVD 8.0（AV:A/PR:L）不符，留待 Day 8 統一 CVSS 模型後修正。
 - 建立 Python 專案骨架：`pyproject.toml`（uv 管理相依）、`src/cve2action/` 套件、pytest 測試、Ruff 設定與 GitHub Actions CI。
