@@ -4,8 +4,11 @@
 
 1. **可快取**：抓過的 CVE 寫成 `data/snapshots/nvd/<CVE-ID>.json`，含來源網址與取得時間。
 2. **可重跑**：預設讀快照，不打網路；`refresh=True` 才重新抓。文章與測試因此離線可重現。
-3. **未知不得變成零**：NVD 沒有 v3.1 分數時回傳 None 並標 UNKNOWN，絕不填 0.0——
+3. **未知不得變成零**：NVD 沒有任何 CVSS 分數時，`scores` 為空並標 UNKNOWN，絕不填 0.0——
    缺資料若變成低分，整條優先序就被靜默污染了。
+
+快照裡的 `raw` 是唯一真相；`extracted` 只是方便閱讀的投影，讀取時一律從 `raw` 重新解析，
+所以解析邏輯升級（例如 Day 8 加入 v4.0）不需要重新抓取任何資料。
 """
 
 from __future__ import annotations
@@ -15,16 +18,20 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from ..normalization.cvss import SEVERITY_UNKNOWN, CvssError, CvssSet, make_score
 
 API_ROOT = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_CACHE_DIR = Path("data/snapshots/nvd")
 # 無 API key 時 NVD 限制 5 requests / 30 秒；留安全邊際
 MIN_REQUEST_INTERVAL_SECONDS = 6.5
-CVSS_UNKNOWN = "UNKNOWN"
+CVSS_UNKNOWN = SEVERITY_UNKNOWN
+# NVD 回應裡的指標區塊名稱與對應版本；v2 已淘汰，不納入
+_METRIC_BLOCKS = (("cvssMetricV31", "3.1"), ("cvssMetricV40", "4.0"))
 
 
 class NvdError(Exception):
@@ -36,18 +43,15 @@ class NvdNotFound(NvdError):
 
 
 class NvdUnavailable(NvdError):
-    """逾時、限流或伺服器錯誤——可重試，且不得當成『沒有漏洞』。"""
+    """逾時、限流或伺服器錯誤——可重試，且不得當成「沒有漏洞」。"""
 
 
 @dataclass(frozen=True)
 class CveRecord:
-    """從 NVD 原始回應抽出的欄位；分數缺漏時保持 None。"""
+    """從 NVD 原始回應抽出的欄位；沒有分數時 `cvss.scores` 為空。"""
 
     cve_id: str
-    cvss_version: str | None
-    base_score: float | None
-    vector: str | None
-    severity: str
+    cvss: CvssSet
     published: str | None
     last_modified: str | None
     description: str
@@ -56,7 +60,7 @@ class CveRecord:
 
     @property
     def has_score(self) -> bool:
-        return self.base_score is not None
+        return bool(self.cvss.scores)
 
 
 def _now_iso() -> str:
@@ -69,17 +73,28 @@ def _pick_english_description(cve: dict[str, Any]) -> str:
             return entry.get("value", "")
     return ""
 
-def _pick_primary_metric(cve: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
-    """挑一組 CVSS 指標。
 
-    v0.1 只認 v3.1，且優先採 NVD 自己的 Primary 評分；找不到就回 (None, None)，
-    交由呼叫端標成 UNKNOWN。v4.0 與多來源評分如何共存是 Day 8 的題目，這裡不預先實作。
-    """
-    metrics = cve.get("metrics", {}).get("cvssMetricV31", [])
-    if not metrics:
-        return None, None
-    primary = next((m for m in metrics if m.get("type") == "Primary"), metrics[0])
-    return "3.1", primary
+def _extract_scores(cve: dict[str, Any]) -> CvssSet:
+    """把 v3.1 與 v4.0 的每一筆評分都保留下來，含評分者與 Primary/Secondary。"""
+    metrics = cve.get("metrics", {})
+    scores = []
+    for block, version in _METRIC_BLOCKS:
+        for entry in metrics.get(block, []):
+            data = entry.get("cvssData", {})
+            if data.get("baseScore") is None or not data.get("vectorString"):
+                continue
+            try:
+                scores.append(make_score(
+                    version=version,
+                    base_score=data["baseScore"],
+                    vector=data["vectorString"],
+                    scorer=entry.get("source", ""),
+                    scorer_type=entry.get("type", ""),
+                ))
+            except CvssError:
+                # 來源資料自相矛盾（宣告版本與 vector 前綴不符）就略過該筆，不猜測
+                continue
+    return CvssSet(tuple(scores))
 
 
 def parse_cve(payload: dict[str, Any], *, cve_id: str, source_url: str,
@@ -90,16 +105,9 @@ def parse_cve(payload: dict[str, Any], *, cve_id: str, source_url: str,
         raise NvdNotFound(f"{cve_id}: NVD returned no vulnerability entry")
 
     cve = vulnerabilities[0].get("cve", {})
-    version, metric = _pick_primary_metric(cve)
-    data = (metric or {}).get("cvssData", {})
-    score = data.get("baseScore")
-
     return CveRecord(
         cve_id=cve.get("id", cve_id),
-        cvss_version=version,
-        base_score=float(score) if score is not None else None,
-        vector=data.get("vectorString"),
-        severity=(data.get("baseSeverity") or CVSS_UNKNOWN).upper(),
+        cvss=_extract_scores(cve),
         published=cve.get("published"),
         last_modified=cve.get("lastModified"),
         description=_pick_english_description(cve),
@@ -154,25 +162,63 @@ def snapshot_path(cve_id: str, cache_dir: Path | str = DEFAULT_CACHE_DIR) -> Pat
     return Path(cache_dir) / f"{cve_id.upper()}.json"
 
 
+def _extracted_view(record: CveRecord) -> dict[str, Any]:
+    return {
+        "cve_id": record.cve_id,
+        "scores": record.cvss.to_dicts(),
+        "published": record.published,
+        "last_modified": record.last_modified,
+        "description": record.description,
+    }
+
+
+def _write_document(path: Path, document: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def write_snapshot(path: Path, record: CveRecord, payload: dict[str, Any]) -> None:
     """快照同時保存抽取結果與原始回應，讓後續施工日能重新解讀同一份資料。"""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    document = {
+    _write_document(path, {
         "_meta": {
             "source_url": record.source_url,
             "retrieved_at": record.retrieved_at,
             "api": "NVD CVE API 2.0",
             "extracted_by": "cve2action.collectors.nvd",
         },
-        "extracted": asdict(record),
+        "extracted": _extracted_view(record),
         "raw": payload,
-    }
-    path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+    })
 
 
 def read_snapshot(path: Path) -> CveRecord:
+    """從快照的 `raw` 重新解析；`extracted` 只是投影，不當作真相。"""
     document = json.loads(path.read_text(encoding="utf-8"))
-    return CveRecord(**document["extracted"])
+    meta = document["_meta"]
+    return parse_cve(
+        document["raw"],
+        cve_id=path.stem.upper(),
+        source_url=meta["source_url"],
+        retrieved_at=meta["retrieved_at"],
+    )
+
+
+def load_snapshots(cache_dir: Path | str = DEFAULT_CACHE_DIR) -> dict[str, CveRecord]:
+    """讀入目錄下所有快照，以 CVE 編號（大寫）為鍵。"""
+    directory = Path(cache_dir)
+    if not directory.is_dir():
+        return {}
+    records = (read_snapshot(p) for p in sorted(directory.glob("CVE-*.json")))
+    return {r.cve_id.upper(): r for r in records}
+
+
+def reparse_snapshot(path: Path) -> CveRecord:
+    """不打網路，用現行解析邏輯重寫 `extracted` 投影。"""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    record = read_snapshot(path)
+    document["extracted"] = _extracted_view(record)
+    _write_document(path, document)
+    return record
 
 
 def get_cve(cve_id: str, *, cache_dir: Path | str = DEFAULT_CACHE_DIR,

@@ -4,7 +4,13 @@
 # - 權重與映射外部化於此檔，不 hard-code；變更權重或門檻須新增/更新 ADR
 # - UNKNOWN 控制不得降低曝險（不知道，就不能假裝已有防護）
 # - Priority Score 僅用於排序與驗證，不宣稱事故機率或財務損失
-version: "0.1.0"
+version: "0.1.1"
+
+# 從 NVD 快照取 CVSS 時的版本偏好（Day 8，ADR-day-08）。
+# 先 3.1：與 Day 5 建立的驗收基準可比；只有 4.0 的 CVE 才退用 4.0。
+# 兩版分數不做換算，輸出一律標明 cvss_version。
+cvss:
+  version_preference: ["3.1", "4.0"]
 
 # Priority Score = 10 × (severity×S + exposure×E + business×B)，權重和必須為 1
 weights:

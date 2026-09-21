@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from . import __version__
-from .collectors.nvd import CVSS_UNKNOWN, DEFAULT_CACHE_DIR, NvdError, get_cve
+from .collectors.nvd import (
+    CVSS_UNKNOWN,
+    DEFAULT_CACHE_DIR,
+    NvdError,
+    get_cve,
+    load_snapshots,
+    reparse_snapshot,
+)
 from .engine import rank
 from .io import InputError, read_asset_context, read_scanner, write_ranked_result
 from .models import DECISION_NEEDS_CONTEXT
@@ -30,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rank_parser.add_argument("--rules", required=True, help="Decision Rule 設定 YAML")
     rank_parser.add_argument("--out", required=True, help="輸出 ranked_result.csv 路徑")
+    rank_parser.add_argument(
+        "--snapshots", help="NVD 快照目錄；給了就用有來源的 CVSS 取代掃描器手填值"
+    )
 
     fetch_parser = subparsers.add_parser(
         "fetch-cve", help="從 NVD 取得 CVE/CVSS 並寫成帶日期的快照"
@@ -40,10 +51,32 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_parser.add_argument(
         "--refresh", action="store_true", help="忽略既有快照，重新向 NVD 取數"
     )
+    fetch_parser.add_argument(
+        "--reparse", action="store_true",
+        help="不打網路，用現行解析邏輯重寫快照目錄裡所有檔案的 extracted 投影",
+    )
     return parser
 
 
+def _format_scores(record) -> str:
+    if not record.has_score:
+        return f" n/a  {CVSS_UNKNOWN}"
+    parts = []
+    for version in record.cvss.versions():
+        score = record.cvss.for_version(version)
+        parts.append(f"v{version}={score.base_score:g} {score.severity}")
+    return "  ".join(parts)
+
+
 def _run_fetch_cve(args) -> int:
+    if args.reparse:
+        paths = sorted(Path(args.cache_dir).glob("CVE-*.json"))
+        for path in paths:
+            record = reparse_snapshot(path)
+            print(f"  {record.cve_id:<18} {_format_scores(record)}  (reparsed)")
+        print(f"{len(paths)} snapshot(s) reparsed in {args.cache_dir}")
+        return 0
+
     cve_ids = list(args.cve_ids)
     if args.from_scanner:
         try:
@@ -68,9 +101,7 @@ def _run_fetch_cve(args) -> int:
             failures += 1
             continue
         origin = "cache" if from_cache else "nvd"
-        score = f"{record.base_score:>4}" if record.has_score else " n/a"
-        severity = record.severity if record.has_score else CVSS_UNKNOWN
-        print(f"  {record.cve_id:<18} {score}  {severity:<9} ({origin})")
+        print(f"  {record.cve_id:<18} {_format_scores(record)}  ({origin})")
 
     print(f"{len(cve_ids) - failures}/{len(cve_ids)} resolved -> {args.cache_dir}")
     return 1 if failures else 0
@@ -88,13 +119,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
-    rows = rank(findings, contexts, rules)
+    snapshots = load_snapshots(args.snapshots) if args.snapshots else {}
+    rows = rank(findings, contexts, rules, snapshots)
     write_ranked_result(rows, args.out)
 
     scored = sum(1 for r in rows if r["decision"] != DECISION_NEEDS_CONTEXT)
     pending = len(rows) - scored
+    sourced = sum(1 for r in rows if str(r["cvss_source"]).startswith("nvd"))
     print(f"ranked {scored} finding(s), {pending} NEEDS_CONTEXT -> {args.out}")
-    print(f"rules: {args.rules} (version {rules.version})")
+    print(f"rules: {args.rules} (version {rules.version}); "
+          f"cvss from nvd: {sourced}/{len(rows)}"
+          + (f" (preference {list(rules.cvss_version_preference)})" if snapshots else ""))
     return 0
 
 

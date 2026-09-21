@@ -25,6 +25,8 @@ OUTPUT_COLUMNS = (
     "asset",
     "cve",
     "cvss",
+    "cvss_version",
+    "cvss_source",
     "environment",
     "effective_exposure",
     "business_criticality",
@@ -57,6 +59,8 @@ class RiskRules:
     control_effectiveness: dict[str, float]
     business_criticality: dict[str, float]
     priority_bands: tuple[PriorityBand, ...] = field(default_factory=tuple)
+    # 從快照取 CVSS 時的版本偏好順序；同一列只會用一個版本，並在輸出標明
+    cvss_version_preference: tuple[str, ...] = ("3.1", "4.0")
 
     def band_for(self, score: float) -> str:
         for band in self.priority_bands:

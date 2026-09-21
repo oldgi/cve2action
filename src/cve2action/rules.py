@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from .models import PriorityBand, RiskRules
+from .normalization.cvss import SUPPORTED_VERSIONS
 
 # v0.1 凍結值域（ADR-day-05）；risk_rules.yaml 只提供數值映射，不得增刪鍵
 REQUIRED_WEIGHT_KEYS = frozenset({"severity", "exposure", "business"})
@@ -63,6 +64,24 @@ def _parse_bands(raw: dict) -> tuple[PriorityBand, ...]:
     return bands
 
 
+def _parse_cvss_preference(raw: dict) -> tuple[str, ...]:
+    section = raw.get("cvss")
+    if not isinstance(section, dict) or not isinstance(section.get("version_preference"), list):
+        raise RulesError("risk_rules.yaml: missing 'cvss.version_preference' list")
+    order = tuple(str(v) for v in section["version_preference"])
+    if not order or len(set(order)) != len(order):
+        raise RulesError(
+            "risk_rules.yaml: cvss.version_preference must be non-empty, no duplicates"
+        )
+    unknown = [v for v in order if v not in SUPPORTED_VERSIONS]
+    if unknown:
+        raise RulesError(
+            f"risk_rules.yaml: unsupported CVSS versions {unknown}; "
+            f"allowed {list(SUPPORTED_VERSIONS)}"
+        )
+    return order
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -94,4 +113,5 @@ def load_rules(path: str | Path) -> RiskRules:
             raw, "business_criticality", REQUIRED_BUSINESS_KEYS
         ),
         priority_bands=_parse_bands(raw),
+        cvss_version_preference=_parse_cvss_preference(raw),
     )
