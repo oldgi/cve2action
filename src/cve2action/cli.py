@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
+from .collectors.epss import EpssError, get_epss_many
 from .collectors.nvd import (
     CVSS_UNKNOWN,
     DEFAULT_CACHE_DIR,
@@ -55,7 +57,57 @@ def build_parser() -> argparse.ArgumentParser:
         "--reparse", action="store_true",
         help="不打網路，用現行解析邏輯重寫快照目錄裡所有檔案的 extracted 投影",
     )
+
+    epss_parser = subparsers.add_parser(
+        "fetch-epss", help="從 FIRST EPSS 取得遭利用機率並寫成帶日期的快照"
+    )
+    epss_parser.add_argument("cve_ids", nargs="*", help="CVE 編號，可給多個")
+    epss_parser.add_argument("--from-scanner", help="改從 scanner.csv 讀取所有 CVE")
+    epss_parser.add_argument("--cache-dir", default=str(EPSS_CACHE_DIR), help="快照目錄")
+    epss_parser.add_argument(
+        "--refresh", action="store_true", help="忽略既有快照，重新向 EPSS 取數"
+    )
     return parser
+
+
+def _collect_cve_ids(args) -> list[str] | None:
+    """合併命令列與 --from-scanner 的 CVE 清單；讀檔失敗回 None（已印出錯誤）。"""
+    cve_ids = list(args.cve_ids)
+    if args.from_scanner:
+        try:
+            findings = read_scanner(args.from_scanner)
+        except (InputError, FileNotFoundError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return None
+        seen = dict.fromkeys(f["cve"].strip() for f in findings if f.get("cve", "").strip())
+        cve_ids.extend(cve for cve in seen if cve not in cve_ids)
+    if not cve_ids:
+        print("error: no CVE ids given (pass ids or --from-scanner)", file=sys.stderr)
+        return None
+    return cve_ids
+
+
+def _run_fetch_epss(args) -> int:
+    cve_ids = _collect_cve_ids(args)
+    if cve_ids is None:
+        return 2
+    try:
+        results = get_epss_many(cve_ids, cache_dir=args.cache_dir, refresh=args.refresh)
+    except EpssError as error:
+        # 整批失敗：不寫任何快照，也不得把這些 CVE 當成「沒有威脅」
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+    unknown = 0
+    for record, from_cache in results.values():
+        origin = "cache" if from_cache else "epss"
+        if record.has_score:
+            print(f"  {record.cve_id:<18} epss={record.epss:.4f}  pct={record.percentile:.4f}"
+                  f"  model={record.model_date}  ({origin})")
+        else:
+            unknown += 1
+            print(f"  {record.cve_id:<18} epss=   n/a  UNKNOWN (not in EPSS)  ({origin})")
+    print(f"{len(results) - unknown}/{len(results)} scored, {unknown} unknown -> {args.cache_dir}")
+    return 0
 
 
 def _format_scores(record) -> str:
@@ -77,18 +129,8 @@ def _run_fetch_cve(args) -> int:
         print(f"{len(paths)} snapshot(s) reparsed in {args.cache_dir}")
         return 0
 
-    cve_ids = list(args.cve_ids)
-    if args.from_scanner:
-        try:
-            findings = read_scanner(args.from_scanner)
-        except (InputError, FileNotFoundError) as error:
-            print(f"error: {error}", file=sys.stderr)
-            return 2
-        seen = dict.fromkeys(f["cve"].strip() for f in findings if f.get("cve", "").strip())
-        cve_ids.extend(cve for cve in seen if cve not in cve_ids)
-
-    if not cve_ids:
-        print("error: no CVE ids given (pass ids or --from-scanner)", file=sys.stderr)
+    cve_ids = _collect_cve_ids(args)
+    if cve_ids is None:
         return 2
 
     failures = 0
@@ -111,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "fetch-cve":
         return _run_fetch_cve(args)
+    if args.command == "fetch-epss":
+        return _run_fetch_epss(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
