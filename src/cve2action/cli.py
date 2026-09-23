@@ -9,6 +9,8 @@ from pathlib import Path
 from . import __version__
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
 from .collectors.epss import EpssError, get_epss_many
+from .collectors.kev import DEFAULT_CACHE_DIR as KEV_CACHE_DIR
+from .collectors.kev import KEV_LISTED, KevError, get_catalog
 from .collectors.nvd import (
     CVSS_UNKNOWN,
     DEFAULT_CACHE_DIR,
@@ -67,7 +69,48 @@ def build_parser() -> argparse.ArgumentParser:
     epss_parser.add_argument(
         "--refresh", action="store_true", help="忽略既有快照，重新向 EPSS 取數"
     )
+
+    kev_parser = subparsers.add_parser(
+        "fetch-kev", help="下載 CISA KEV 完整目錄，並查詢指定 CVE 的列入狀態"
+    )
+    kev_parser.add_argument("cve_ids", nargs="*", help="要查狀態的 CVE 編號，可給多個")
+    kev_parser.add_argument("--from-scanner", help="改從 scanner.csv 讀取所有 CVE")
+    kev_parser.add_argument("--cache-dir", default=str(KEV_CACHE_DIR), help="快照目錄")
+    kev_parser.add_argument(
+        "--refresh", action="store_true", help="忽略既有快照，重新下載目錄"
+    )
     return parser
+
+
+def _run_fetch_kev(args) -> int:
+    try:
+        catalog, from_cache = get_catalog(cache_dir=args.cache_dir, refresh=args.refresh)
+    except KevError as error:
+        # 目錄拿不到或不完整時，不得把任何 CVE 判成「不在清單裡」
+        print(f"error: {error}", file=sys.stderr)
+        return 1
+
+    origin = "cache" if from_cache else "cisa"
+    print(f"catalog {catalog.catalog_version}: {len(catalog)} entries "
+          f"(released {catalog.date_released[:10]}, {origin})")
+
+    cve_ids = list(args.cve_ids)
+    if args.from_scanner or cve_ids:
+        cve_ids = _collect_cve_ids(args)
+        if cve_ids is None:
+            return 2
+        listed = 0
+        for cve_id in cve_ids:
+            entry = catalog.get(cve_id)
+            if entry is None:
+                print(f"  {cve_id.upper():<18} {'NOT_LISTED':<12}")
+                continue
+            listed += 1
+            ransomware = "ransomware" if entry.known_ransomware else "ransomware unknown"
+            print(f"  {entry.cve_id:<18} {KEV_LISTED:<12} added={entry.date_added}"
+                  f"  due={entry.due_date}  {ransomware}")
+        print(f"{listed}/{len(cve_ids)} listed in KEV -> {args.cache_dir}")
+    return 0
 
 
 def _collect_cve_ids(args) -> list[str] | None:
@@ -155,6 +198,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_fetch_cve(args)
     if args.command == "fetch-epss":
         return _run_fetch_epss(args)
+    if args.command == "fetch-kev":
+        return _run_fetch_kev(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
