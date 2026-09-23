@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 CISA KEV Collector（`cve2action fetch-kev`）：一次下載完整目錄（1,721 筆）並在本地查表，狀態採三態——`LISTED`／`NOT_LISTED`（兩者皆為事實）／`UNKNOWN`（僅在未取得目錄時）；比對目錄宣告的 `count` 與實際筆數，殘缺即整批拒收，`knownRansomwareCampaignUse` 的 Unknown 映射為 None 而非 False。新增目錄快照與 22 個離線測試；KEV 尚未進入評分公式（留待 Day 14）。
 - 新增 EPSS Collector（`cve2action fetch-epss`）：批次查詢 FIRST EPSS，快照記錄 `model_date` 與取得時間；查無資料視為正常答案並寫入快照，逾時與 HTTP 錯誤拋 `EpssUnavailable` 不寫檔。新增 7 份 EPSS 快照與 17 個離線測試；EPSS 尚未進入評分公式（留待 Day 14）。
 - 統一 CVSS 模型（`normalization/cvss.py`）：v3.1 與 v4.0 並存，每筆分數保留版本、vector、評分者與 Primary/Secondary，不做跨版本換算；版本偏好外部化至 `risk_rules.yaml`（`cvss.version_preference`），變更記錄於 ADR-day-08。
 - `cve2action rank --snapshots`：以 NVD 快照的分數取代掃描器手填值，輸出新增 `cvss_version`、`cvss_source`；不一致時 `reason` 註明 `scanner said`，NVD 未評分時退回掃描器值，皆無則 `NEEDS_CONTEXT`。
