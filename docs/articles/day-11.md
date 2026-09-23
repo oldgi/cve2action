@@ -1,6 +1,6 @@
 # Day 11｜建立一間不存在的數位公司
 
-**Twenty Assets, Forty Findings, Two Bugs**
+**Twenty Assets, Forty Findings**
 
 ![cover](../images/day-11-cover.png)
 
