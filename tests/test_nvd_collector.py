@@ -176,7 +176,56 @@ def test_http_status_maps_to_typed_error(monkeypatch, code, expected):
 
     monkeypatch.setattr(nvd.urllib.request, "urlopen", boom)
     with pytest.raises(expected):
-        nvd.NvdClient(min_interval=0).fetch("CVE-2022-26134")
+        nvd.NvdClient(min_interval=0, backoff=0, sleep=lambda _s: None).fetch("CVE-2022-26134")
+
+
+def test_rate_limit_is_retried_once_after_backoff(monkeypatch):
+    """429 是暫時性的：退避後重試一次就好，不要放棄也不要無限重試。"""
+    slept, attempts = [], []
+
+    class Response:
+        def read(self):
+            return json.dumps(payload()).encode("utf-8")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    def flaky(*_a, **_k):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise urllib.error.HTTPError("url", 429, "rate limited", {}, None)
+        return Response()
+
+    monkeypatch.setattr(nvd.urllib.request, "urlopen", flaky)
+    client = nvd.NvdClient(min_interval=0, backoff=30.0, sleep=slept.append)
+    result, _url = client.fetch("CVE-2022-26134")
+    assert len(attempts) == 2 and 30.0 in slept
+    assert result["vulnerabilities"][0]["cve"]["id"] == "CVE-2022-26134"
+
+
+def test_rate_limit_retry_gives_up_after_one_attempt(monkeypatch):
+    def always_429(*_a, **_k):
+        raise urllib.error.HTTPError("url", 429, "rate limited", {}, None)
+
+    monkeypatch.setattr(nvd.urllib.request, "urlopen", always_429)
+    with pytest.raises(nvd.NvdUnavailable, match="429"):
+        nvd.NvdClient(min_interval=0, backoff=0, sleep=lambda _s: None).fetch("CVE-1")
+
+
+def test_non_rate_limit_error_is_not_retried(monkeypatch):
+    attempts = []
+
+    def boom(*_a, **_k):
+        attempts.append(1)
+        raise urllib.error.HTTPError("url", 503, "err", {}, None)
+
+    monkeypatch.setattr(nvd.urllib.request, "urlopen", boom)
+    with pytest.raises(nvd.NvdUnavailable):
+        nvd.NvdClient(min_interval=0, backoff=0, sleep=lambda _s: None).fetch("CVE-1")
+    assert len(attempts) == 1
 
 
 def test_client_throttles_between_requests(monkeypatch):

@@ -82,3 +82,27 @@ def test_empty_set_means_unscored_not_zero():
 def test_round_trips_through_dicts():
     scores = juniper_like()
     assert cvss.CvssSet.from_dicts(scores.to_dicts()) == scores
+
+
+def test_nvd_self_assessment_wins_even_when_typed_secondary():
+    """真實案例 CVE-2020-1472：兩個 v3.1 都是 Secondary，NVD 自評 10.0 排在廠商 5.5 後面。"""
+    vendor = cvss.make_score(version="3.1", base_score=5.5, vector=V31,
+                             scorer="secure@microsoft.com", scorer_type="Secondary")
+    nvd = cvss.make_score(version="3.1", base_score=10.0,
+                          vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H",
+                          scorer="nvd@nist.gov", scorer_type="Secondary")
+    assert cvss.CvssSet((vendor, nvd)).for_version("3.1").base_score == 10.0
+
+
+def test_primary_still_beats_nvd_secondary():
+    nvd_secondary = cvss.make_score(version="3.1", base_score=10.0, vector=V31,
+                                    scorer="nvd@nist.gov", scorer_type="Secondary")
+    cna_primary = cvss.make_score(version="3.1", base_score=7.5, vector=V31,
+                                  scorer="cna@example.org", scorer_type="Primary")
+    assert cvss.CvssSet((nvd_secondary, cna_primary)).for_version("3.1").base_score == 7.5
+
+
+def test_without_primary_or_nvd_the_first_entry_is_used():
+    first = cvss.make_score(version="3.1", base_score=6.1, vector=V31, scorer="a@cna")
+    second = cvss.make_score(version="3.1", base_score=8.2, vector=V31, scorer="b@cna")
+    assert cvss.CvssSet((first, second)).for_version("3.1").base_score == 6.1

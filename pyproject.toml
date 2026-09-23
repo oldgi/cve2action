@@ -40,3 +40,5 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # Day 2 資料檢查腳本先於本設定存在；只放寬風格類規則，不放寬正確性檢查
 "scripts/validate_day02.py" = ["E501", "B905"]
+# 資料表：一列一筆資產／發現，硬折行反而看不出對齊
+"scripts/build_northstar.py" = ["E501"]

@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 SUPPORTED_VERSIONS = ("3.1", "4.0")
+# NVD 自己的評分來源；它有時把自評標成 Secondary（例如 CVE-2020-1472）
+NVD_SOURCE = "nvd@nist.gov"
 SEVERITY_UNKNOWN = "UNKNOWN"
 
 # (下限, 分級)；上限由下一級的下限決定，10.0 為封頂
@@ -84,11 +86,19 @@ class CvssSet:
         return tuple(dict.fromkeys(s.version for s in self.scores))
 
     def for_version(self, version: str) -> CvssScore | None:
-        """同版本有多個評分者時，NVD 的 Primary 優先；其餘照原始順序。"""
+        """同版本多個評分者時的取用順序：Primary → NVD 自評 → 回應原始順序。
+
+        第二層是必要的：NVD 偶爾把自己的評分標成 Secondary，只看 `type` 會讓
+        廠商評分單純因為排在前面而勝出（CVE-2020-1472 即 5.5 蓋過 NVD 的 10.0）。
+        """
         candidates = [s for s in self.scores if s.version == version]
         if not candidates:
             return None
-        return next((s for s in candidates if s.is_primary), candidates[0])
+        for prefer in (lambda s: s.is_primary, lambda s: s.scorer == NVD_SOURCE):
+            chosen = next((s for s in candidates if prefer(s)), None)
+            if chosen is not None:
+                return chosen
+        return candidates[0]
 
     def preferred(self, order: tuple[str, ...] | list[str]) -> CvssScore | None:
         """依偏好順序取第一個存在的版本；全部缺席回 None，交由呼叫端標 UNKNOWN。"""

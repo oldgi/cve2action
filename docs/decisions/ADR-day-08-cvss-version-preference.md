@@ -18,7 +18,11 @@ Decision Engine v0.1 的 `S = CVSS / 10` 需要一個明確、可重現的規則
 
 1. **每筆分數保留 version、base_score、vector、scorer、scorer_type，不做跨版本換算。** 兩版共用 0–10 與相同的定性分級，但公式不同，換算會製造假精確。
 2. **選用順序外部化**於 `risk_rules.yaml` 的 `cvss.version_preference`，v0.1 為 `["3.1", "4.0"]`：先 3.1 是為了與 Day 5 建立的驗收基準可比；只有 4.0 的 CVE 才退用 4.0。
-3. **同版本多評分者時 NVD Primary 優先**，其餘照 NVD 回應順序。
+3. **同版本多評分者的取用順序：Primary → NVD 自評（`nvd@nist.gov`）→ 回應原始順序。**
+
+   第二層於 Day 11 補上。NVD 偶爾把自己的評分標成 `Secondary`：CVE-2020-1472（Zerologon）
+   的兩筆 v3.1 都是 Secondary，微軟 5.5 排在 NVD 自評 10.0 前面，只看 `type` 會讓 5.5 勝出
+   （Medium 而非 Critical）。唯一的 `Primary` 是 CVSS v2，不在支援範圍。
 4. **輸出每列標明 `cvss_version` 與 `cvss_source`**（`nvd/primary`、`nvd/secondary`、`scanner`），排序表裡不同版本的分數不得混在同一欄而不標示。
 5. **有來源的快照分數優先於掃描器手填值**；不一致時在 `reason` 註明 `scanner said X`。快照存在但無任何分數時退回掃描器值並註明 `nvd unscored`；兩者皆無則 `NEEDS_CONTEXT`，不補零。
 6. 快照的 `raw` 為唯一真相，`extracted` 只是投影；解析邏輯升級以 `fetch-cve --reparse` 重寫投影，不重新取數。

@@ -27,8 +27,10 @@ from ..normalization.cvss import SEVERITY_UNKNOWN, CvssError, CvssSet, make_scor
 
 API_ROOT = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 DEFAULT_CACHE_DIR = Path("data/snapshots/nvd")
-# 無 API key 時 NVD 限制 5 requests / 30 秒；留安全邊際
-MIN_REQUEST_INTERVAL_SECONDS = 6.5
+# 無 API key 時 NVD 限制 5 requests / 30 秒。6.5 秒剛好卡在滾動窗邊界，實測仍會被擋，
+# 所以拉到 7.5 秒；真的被擋時再退避重試一次。
+MIN_REQUEST_INTERVAL_SECONDS = 7.5
+RATE_LIMIT_BACKOFF_SECONDS = 30.0
 CVSS_UNKNOWN = SEVERITY_UNKNOWN
 # NVD 回應裡的指標區塊名稱與對應版本；v2 已淘汰，不納入
 _METRIC_BLOCKS = (("cvssMetricV31", "3.1"), ("cvssMetricV40", "4.0"))
@@ -121,10 +123,12 @@ class NvdClient:
 
     def __init__(self, *, api_key: str | None = None, timeout: float = 30.0,
                  min_interval: float = MIN_REQUEST_INTERVAL_SECONDS,
+                 backoff: float = RATE_LIMIT_BACKOFF_SECONDS,
                  sleep: Callable[[float], None] = time.sleep) -> None:
         self.api_key = api_key
         self.timeout = timeout
         self.min_interval = min_interval
+        self.backoff = backoff
         self._sleep = sleep
         self._last_request_at: float | None = None
 
@@ -135,9 +139,7 @@ class NvdClient:
         if elapsed < self.min_interval:
             self._sleep(self.min_interval - elapsed)
 
-    def fetch(self, cve_id: str) -> tuple[dict[str, Any], str]:
-        """回傳 (原始 JSON, 來源網址)。網路層問題一律轉成 NvdUnavailable。"""
-        url = f"{API_ROOT}?cveId={cve_id}"
+    def _request_once(self, cve_id: str, url: str) -> dict[str, Any]:
         request = urllib.request.Request(url, headers={"User-Agent": "cve2action/0.2"})
         if self.api_key:
             request.add_header("apiKey", self.api_key)
@@ -145,7 +147,7 @@ class NvdClient:
         self._throttle()
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
             if error.code == 404:
                 raise NvdNotFound(f"{cve_id}: not found at NVD") from error
@@ -155,7 +157,19 @@ class NvdClient:
         finally:
             self._last_request_at = time.monotonic()
 
-        return payload, url
+    def fetch(self, cve_id: str) -> tuple[dict[str, Any], str]:
+        """回傳 (原始 JSON, 來源網址)。網路層問題一律轉成 NvdUnavailable。
+
+        被限流（429）時退避後重試一次；仍失敗就讓呼叫端知道，不靜默略過。
+        """
+        url = f"{API_ROOT}?cveId={cve_id}"
+        try:
+            return self._request_once(cve_id, url), url
+        except NvdUnavailable as error:
+            if "HTTP 429" not in str(error):
+                raise
+            self._sleep(self.backoff)
+            return self._request_once(cve_id, url), url
 
 
 def snapshot_path(cve_id: str, cache_dir: Path | str = DEFAULT_CACHE_DIR) -> Path:

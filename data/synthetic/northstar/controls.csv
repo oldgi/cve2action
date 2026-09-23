@@ -1,0 +1,9 @@
+asset_id,control_type,effectiveness,evidence,verified_at
+NS-WEB-PORTAL-01,waf,STRONG,blocking rules tuned for this app; quarterly bypass test,2026-08-14
+NS-API-GW-01,waf,PARTIAL,"shared ruleset, not tuned for API schemas",2026-08-14
+NS-MAIL-GW-01,edr,PARTIAL,"detects post-exploitation, no pre-auth blocking evidence",2026-09-02
+NS-APP-INTRANET-01,edr,UNKNOWN,agent installed; no test covering this exploit class,2026-05-30
+NS-DB-CUSTOMER-01,network_segmentation,STRONG,allowlist verified by negative test,2026-09-10
+NS-DB-BILLING-01,network_segmentation,STRONG,allowlist verified by negative test,2026-09-10
+NS-AD-DC-01,mfa_admin_tiering,STRONG,tier-0 accounts enforce phishing-resistant MFA,2026-08-28
+NS-JUMP-01,mfa,PARTIAL,MFA enforced; session recording gaps on break-glass account,2026-09-05
