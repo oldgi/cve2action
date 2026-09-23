@@ -3,6 +3,7 @@
 import csv
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -86,6 +87,17 @@ def test_engine_scores_the_whole_dataset(ranked):
     scored = [r for r in ranked.values() if r["decision"] == DECISION_SCORED]
     assert len(scored) == 38
     assert all(r["cvss_source"].startswith("nvd/") for r in scored)
+
+
+def test_band_distribution_is_the_one_the_article_quotes():
+    """文章與配圖都引用這組數字；改動資料集就必須一起更新，不能悄悄漂移。"""
+    rows = rank(read_scanner(DATA / "scanner.csv"),
+                read_asset_context(DATA / "asset_context.csv"),
+                RULES, load_snapshots(ROOT / "data" / "snapshots" / "nvd"))
+    bands = Counter(r["priority"] for r in rows if r["decision"] == DECISION_SCORED)
+    assert dict(bands) == {"Critical": 8, "High": 22, "Medium": 8}
+    assert bands["Low"] == 0, "v0.1 公式在這家公司產不出 Low —— Day 18 校準的題目"
+    assert sum(bands.values()) + 2 == len(rows) == 40
 
 
 def test_the_two_gaps_are_needs_context_not_guesses(ranked):
