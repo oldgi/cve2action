@@ -1,6 +1,6 @@
 # Day 10｜CISA KEV：哪些漏洞已被實際利用？
 
-**Not Listed Is Not Safe**
+**Facts, Not Forecasts**
 
 ![cover](../images/day-10-cover.png)
 
@@ -10,7 +10,7 @@
 
 > **豆知識：KEV 是什麼？** Known Exploited Vulnerabilities，CISA 維護的目錄，只收「有可靠證據、已經被實際利用」的漏洞。美國聯邦機關依法必須在期限內修完，所以每一筆都附一個 `dueDate`。它不是預測，是已發生事實的清單。
 
-## 這次的取數形狀不一樣
+## 不是一筆一筆查，是整份下載
 
 ![catalog](../images/day-10-catalog.png)
 
