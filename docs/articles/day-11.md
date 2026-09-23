@@ -42,7 +42,7 @@
 
 兩層原因。我挑 CVE 偏好有名的，三十個裡二十四個在 KEV；更根本的是公式——一半權重給了曝險與業務，而這家公司十三台 CRITICAL、六台對外，光這兩項就把底分推到五分以上。
 
-**一個把所有東西都排在 Medium 以上的工具，跟原本那份弱掃報告一樣沒用。** 這是 Day 18 校準的第一個題目，今天先記下來。
+**一個把所有東西都排在 Medium 以上的工具，跟原本那份弱掃報告一樣沒用。** 這是 Day 18 校準的第一個題目。
 
 ## 明天
 
@@ -50,4 +50,4 @@
 
 > **Day 12｜Internet、內網、隔離區：有效曝險怎麼量化？**
 
-資料集與建置腳本：[github.com/oldgi/cve2action](https://github.com/oldgi/cve2action)。Northstar 為完全虛構的公司；CVE、CVSS、EPSS、KEV 均為公開資料。
+資料集與建置腳本：[github.com/oldgi/cve2action](https://github.com/oldgi/cve2action)。Northstar 為完全虛構；CVE、CVSS、EPSS、KEV 為公開資料。
