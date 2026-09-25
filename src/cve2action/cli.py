@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
+from datetime import date
 from pathlib import Path
 
 from . import __version__
@@ -22,6 +24,7 @@ from .collectors.nvd import (
 from .engine import rank
 from .io import InputError, read_asset_context, read_scanner, write_ranked_result
 from .models import DECISION_NEEDS_CONTEXT
+from .normalization.exposure import ExposureError, derive_asset_context
 from .rules import RulesError, load_rules
 
 
@@ -79,7 +82,50 @@ def build_parser() -> argparse.ArgumentParser:
     kev_parser.add_argument(
         "--refresh", action="store_true", help="忽略既有快照，重新下載目錄"
     )
+
+    derive_parser = subparsers.add_parser(
+        "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
+    )
+    derive_parser.add_argument("--assets", required=True, help="資產清冊 CSV")
+    derive_parser.add_argument("--controls", required=True, help="控制措施 CSV")
+    derive_parser.add_argument("--rules", required=True, help="Decision Rule 設定 YAML")
+    derive_parser.add_argument("--out", required=True, help="輸出 asset_context.csv 路徑")
+    derive_parser.add_argument(
+        "--as-of", required=True,
+        help="情境時點 YYYY-MM-DD；控制證據的年齡以此計算，固定值才能重現",
+    )
     return parser
+
+
+def _read_rows(path: str) -> list[dict]:
+    with open(path, encoding="utf-8-sig", newline="") as stream:
+        return list(csv.DictReader(stream))
+
+
+def _run_derive_context(args) -> int:
+    try:
+        rules = load_rules(args.rules)
+        as_of = date.fromisoformat(args.as_of)
+        rows = derive_asset_context(_read_rows(args.assets), _read_rows(args.controls),
+                                    rules, as_of)
+    except (RulesError, ExposureError, ValueError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    header = ["asset", "environment", "reachability", "control_effectiveness",
+              "business_criticality", "reachability_source", "control_source"]
+    with open(args.out, "w", encoding="utf-8", newline="") as stream:
+        writer = csv.writer(stream, lineterminator='\n')
+        writer.writerow(header)
+        writer.writerows([row[column] for column in header] for row in rows)
+
+    expired = sum(1 for r in rows if "expired" in r["control_source"])
+    observed = sum(1 for r in rows if r["reachability_source"] == "observed")
+    print(f"derived {len(rows)} asset(s) as of {as_of} -> {args.out}")
+    print(f"reachability: {len(rows) - observed} from zone, {observed} observed; "
+          f"control evidence expired on {expired} asset(s) "
+          f"(max age {rules.control_evidence_max_age_days}d)")
+    return 0
 
 
 def _run_fetch_kev(args) -> int:
@@ -200,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_fetch_epss(args)
     if args.command == "fetch-kev":
         return _run_fetch_kev(args)
+    if args.command == "derive-context":
+        return _run_derive_context(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)

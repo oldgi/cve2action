@@ -10,14 +10,23 @@ from __future__ import annotations
 
 import csv
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cve2action.collectors.nvd import load_snapshots  # noqa: E402
+from cve2action.normalization.exposure import derive_asset_context  # noqa: E402
+from cve2action.rules import load_rules  # noqa: E402
 
 OUT = ROOT / "data" / "synthetic" / "northstar"
+
+ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role", "criticality",
+                "crown_jewel", "owner_team"]
+CONTROL_HEADER = ["asset_id", "control_type", "effectiveness", "evidence", "verified_at"]
+CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
+                  "business_criticality", "reachability_source", "control_source"]
 
 # 虛構公司 Northstar Digital Services：20 項資產、4 項 Crown Jewel。
 # asset_id, hostname, zone, environment, business_role, criticality, crown_jewel, owner_team
@@ -56,10 +65,8 @@ CONTROLS = [
     ("NS-JUMP-01", "mfa", "PARTIAL", "MFA enforced; session recording gaps on break-glass account", "2026-09-05"),
 ]
 
-ZONE_REACHABILITY = {
-    "DMZ": "INTERNET", "APP": "INTERNAL", "DATA": "INTERNAL", "CORP": "INTERNAL",
-    "MGMT": "INTERNAL", "OT": "ISOLATED", "LAB": "ISOLATED",
-}
+# 情境時點。必須固定，不能用今天的日期——否則控制證據的年齡每天都變，資料集就不可重現。
+SCENARIO_AS_OF = date(2026, 9, 24)
 
 # 40 筆掃描發現。真實弱掃報告是金字塔：少數 RCE、大量弱加密與資訊洩漏。
 # asset, cve, service
@@ -124,18 +131,15 @@ def write_csv(name: str, header: list[str], rows: list[tuple]) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     nvd = load_snapshots()
-    control_effectiveness = {asset: eff for asset, _t, eff, _e, _v in CONTROLS}
+    rules = load_rules(ROOT / "config" / "risk_rules.yaml")
 
-    write_csv("assets.csv",
-              ["asset_id", "hostname", "zone", "environment", "business_role", "criticality",
-               "crown_jewel", "owner_team"], ASSETS)
-    write_csv("controls.csv",
-              ["asset_id", "control_type", "effectiveness", "evidence", "verified_at"], CONTROLS)
-    write_csv("asset_context.csv",
-              ["asset", "environment", "reachability", "control_effectiveness",
-               "business_criticality"],
-              [(asset, env, ZONE_REACHABILITY[zone], control_effectiveness.get(asset, "NONE"), crit)
-               for asset, _h, zone, env, _role, crit, _cj, _owner in ASSETS])
+    write_csv("assets.csv", ASSET_HEADER, ASSETS)
+    write_csv("controls.csv", CONTROL_HEADER, CONTROLS)
+    asset_dicts = [dict(zip(ASSET_HEADER, row, strict=True)) for row in ASSETS]
+    control_dicts = [dict(zip(CONTROL_HEADER, row, strict=True)) for row in CONTROLS]
+    context = derive_asset_context(asset_dicts, control_dicts, rules, SCENARIO_AS_OF)
+    write_csv("asset_context.csv", CONTEXT_HEADER,
+              [tuple(row[col] for col in CONTEXT_HEADER) for row in context])
 
     rows = []
     for asset, cve, service in FINDINGS:

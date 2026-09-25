@@ -61,6 +61,10 @@ class RiskRules:
     priority_bands: tuple[PriorityBand, ...] = field(default_factory=tuple)
     # 從快照取 CVSS 時的版本偏好順序；同一列只會用一個版本，並在輸出標明
     cvss_version_preference: tuple[str, ...] = ("3.1", "4.0")
+    # Zone → Reachability 的假設對應（Day 12）；有觀測值時以觀測為準
+    zone_reachability: dict[str, str] = field(default_factory=dict)
+    # 控制證據的有效天數；超過就不能再拿它打折
+    control_evidence_max_age_days: int = 90
 
     def band_for(self, score: float) -> str:
         for band in self.priority_bands:

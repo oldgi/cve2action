@@ -4,7 +4,7 @@
 # - 權重與映射外部化於此檔，不 hard-code；變更權重或門檻須新增/更新 ADR
 # - UNKNOWN 控制不得降低曝險（不知道，就不能假裝已有防護）
 # - Priority Score 僅用於排序與驗證，不宣稱事故機率或財務損失
-version: "0.1.1"
+version: "0.1.2"
 
 # 從 NVD 快照取 CVSS 時的版本偏好（Day 8，ADR-day-08）。
 # 先 3.1：與 Day 5 建立的驗收基準可比；只有 4.0 的 CVE 才退用 4.0。
@@ -17,6 +17,21 @@ weights:
   severity: 0.50   # S = CVSS / 10
   exposure: 0.25   # E = Reachability × Control Effectiveness
   business: 0.25   # B = Business Impact
+
+# Zone → Reachability（Day 12，ADR-day-12）。
+# Zone 是行政標籤，不是觀測到的可達性——這張表是「在沒有更好資料前」的假設，
+# 有實際觀測時以觀測為準（Day 20 的 Reachability Engine 會取代它）。
+exposure:
+  zone_reachability:
+    DMZ: INTERNET
+    APP: INTERNAL
+    DATA: INTERNAL
+    CORP: INTERNAL
+    MGMT: INTERNAL
+    OT: ISOLATED
+    LAB: ISOLATED
+  # 控制證據的有效天數。過期不代表控制失效，但不能再拿它打折（降為 UNKNOWN）。
+  control_evidence_max_age_days: 90
 
 reachability:
   INTERNET: 1.0

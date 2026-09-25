@@ -144,6 +144,24 @@ def test_unknown_control_does_not_earn_a_discount(ranked):
     assert unknown["effective_exposure"] == none["effective_exposure"] == 0.6
 
 
+def test_context_is_derived_not_hand_written():
+    """asset_context 的每一列都必須能從 assets + controls 推導出來，並帶著來源。"""
+    from datetime import date
+
+    from cve2action.normalization.exposure import derive_asset_context
+
+    derived = derive_asset_context(read("assets.csv"), read("controls.csv"), RULES,
+                                   date(2026, 9, 24))
+    committed = read("asset_context.csv")
+    assert derived == committed
+
+    sources = {r["reachability_source"] for r in committed}
+    assert sources == {"zone:DMZ", "zone:APP", "zone:DATA", "zone:CORP", "zone:MGMT",
+                       "zone:OT", "zone:LAB"}, "每個值都要說得出是從哪個 Zone 推來的"
+    expired = [r["asset"] for r in committed if "expired" in r["control_source"]]
+    assert expired == ["NS-APP-INTRANET-01"], "90 天窗口下只有這台的控制證據過期"
+
+
 # --- 可重現 -------------------------------------------------------------------
 
 def test_rebuilding_from_snapshots_is_byte_identical():

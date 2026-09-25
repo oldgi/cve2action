@@ -82,6 +82,30 @@ def _parse_cvss_preference(raw: dict) -> tuple[str, ...]:
     return order
 
 
+def _parse_exposure(raw: dict, reachability: dict[str, float]) -> tuple[dict[str, str], int]:
+    section = raw.get("exposure")
+    if not isinstance(section, dict):
+        raise RulesError("risk_rules.yaml: missing 'exposure' section")
+
+    mapping = section.get("zone_reachability")
+    if not isinstance(mapping, dict) or not mapping:
+        raise RulesError("risk_rules.yaml: missing 'exposure.zone_reachability'")
+    zones = {str(z).upper(): str(v).upper() for z, v in mapping.items()}
+    unknown = sorted({v for v in zones.values()} - set(reachability))
+    if unknown:
+        raise RulesError(
+            f"risk_rules.yaml: zone_reachability maps to unknown values {unknown}; "
+            f"allowed {sorted(reachability)}"
+        )
+
+    max_age = section.get("control_evidence_max_age_days")
+    if not isinstance(max_age, int) or max_age <= 0:
+        raise RulesError(
+            "risk_rules.yaml: 'exposure.control_evidence_max_age_days' must be a positive integer"
+        )
+    return zones, max_age
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -104,14 +128,19 @@ def load_rules(path: str | Path) -> RiskRules:
             f"(UNKNOWN={control['UNKNOWN']} < NONE={control['NONE']})"
         )
 
+    reachability = _require_mapping(raw, "reachability", REQUIRED_REACHABILITY_KEYS)
+    zones, max_age = _parse_exposure(raw, reachability)
+
     return RiskRules(
         version=str(raw.get("version", "unversioned")),
         weights=weights,
-        reachability=_require_mapping(raw, "reachability", REQUIRED_REACHABILITY_KEYS),
+        reachability=reachability,
         control_effectiveness=control,
         business_criticality=_require_mapping(
             raw, "business_criticality", REQUIRED_BUSINESS_KEYS
         ),
         priority_bands=_parse_bands(raw),
         cvss_version_preference=_parse_cvss_preference(raw),
+        zone_reachability=zones,
+        control_evidence_max_age_days=max_age,
     )
