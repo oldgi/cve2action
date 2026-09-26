@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 `normalization/exposure.py`：Reachability 由 Zone 推導（`risk_rules.yaml` 的 `exposure.zone_reachability`，可被觀測值覆寫）、Control Effectiveness 由 `controls.csv` 推導並套用證據有效期；每個值附 `reachability_source`／`control_source` 說明來源。新增 CLI `cve2action derive-context` 與 23 個測試，ADR-day-12 記錄規則。
 - 新增 Northstar Digital Services 模擬資料集（藍圖 §8.2 規模：20 資產、40 findings、8 控制、4 Crown Jewel）與建置腳本 `scripts/build_northstar.py`；CVSS 全部取自 NVD 快照而非手填，離線重建輸出逐位元組相同，並以 17 個測試涵蓋規模、值域、無真實企業資訊與四個必測情境。
 - 新增 CISA KEV Collector（`cve2action fetch-kev`）：一次下載完整目錄（1,721 筆）並在本地查表，狀態採三態——`LISTED`／`NOT_LISTED`（兩者皆為事實）／`UNKNOWN`（僅在未取得目錄時）；比對目錄宣告的 `count` 與實際筆數，殘缺即整批拒收，`knownRansomwareCampaignUse` 的 Unknown 映射為 None 而非 False。新增目錄快照與 22 個離線測試；KEV 尚未進入評分公式（留待 Day 14）。
 - 新增 EPSS Collector（`cve2action fetch-epss`）：批次查詢 FIRST EPSS，快照記錄 `model_date` 與取得時間；查無資料視為正常答案並寫入快照，逾時與 HTTP 錯誤拋 `EpssUnavailable` 不寫檔。新增 7 份 EPSS 快照與 17 個離線測試；EPSS 尚未進入評分公式（留待 Day 14）。
@@ -31,6 +32,7 @@
 
 ### Changed
 
+- 控制證據超過 `exposure.control_evidence_max_age_days`（v0.1 為 90 天）即不可用於折減，該控制降為 `UNKNOWN` 而非 `NONE`；多個控制取效果最強者，不相乘。`asset_context.csv` 新增兩個來源欄位，推導結果與 Day 11 手寫版的四個決策欄位完全相同。
 - NVD collector 請求間隔由 6.5 秒調整為 7.5 秒，並在遭遇 429 時退避重試一次——6.5 秒仍會觸發「30 秒 5 次」的滾動窗限制。
 - CVSS 同版本多評分者的取用順序補上第二層「NVD 自評優先」（ADR-day-08 已更新）：NVD 偶爾把自評標成 Secondary，原規則讓 CVE-2020-1472 取到廠商的 5.5 而非 NVD 的 10.0。
 - 依使用者修訂納入資產負責團隊、相容性限制、控制驗證日期、SLA、風險接受與重評條件。
