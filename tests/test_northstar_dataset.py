@@ -150,9 +150,8 @@ def test_context_is_derived_not_hand_written():
     """asset_context 的每一列都必須能從 assets + controls 推導出來，並帶著來源。"""
     from datetime import date
 
-    from cve2action.normalization.exposure import derive_asset_context
-
     from cve2action.normalization.business import derive_business_context
+    from cve2action.normalization.exposure import derive_asset_context
 
     business = derive_business_context(read("business_context.csv"), RULES.business_impact)
     assets = [dict(a, criticality=business[a["asset_id"]].value) for a in read("assets.csv")]
