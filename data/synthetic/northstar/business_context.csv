@@ -1,0 +1,21 @@
+asset_id,data_class,rto_hours,customer_facing,notes
+NS-WEB-PORTAL-01,INTERNAL,2,yes,customer sign-in and self-service
+NS-WEB-PORTAL-02,INTERNAL,2,yes,same service behind the load balancer
+NS-API-GW-01,INTERNAL,2,yes,partner and mobile API entry point
+NS-MAIL-GW-01,CONFIDENTIAL,8,no,internal mail; queues survive a short outage
+NS-VPN-GW-01,INTERNAL,4,no,staff remote access; no customer traffic
+NS-EDGE-RTR-01,NONE,1,no,all north-south traffic; nothing works without it
+NS-APP-ORDER-01,CONFIDENTIAL,2,yes,order capture; downtime loses transactions
+NS-APP-BILLING-01,RESTRICTED,4,no,handles cardholder and tax data
+NS-APP-INTRANET-01,INTERNAL,48,no,staff wiki and forms; tolerable for two days
+NS-APP-REPORT-01,INTERNAL,72,no,nightly management reports
+NS-DB-CUSTOMER-01,RESTRICTED,2,no,personal data under contract and law
+NS-DB-BILLING-01,RESTRICTED,4,no,billing records under audit scope
+NS-BACKUP-01,RESTRICTED,24,no,holds copies of everything above
+NS-FILE-SRV-01,INTERNAL,24,no,shared drives; a day offline stops several teams
+NS-AD-DC-01,CONFIDENTIAL,1,no,authentication for every other system
+NS-JUMP-01,NONE,4,no,no data of its own; without it nothing can be administered
+NS-MON-01,INTERNAL,8,no,alerting; blind spot grows with every hour down
+NS-OPS-WS-07,INTERNAL,24,no,one operator's endpoint; work can move to a spare
+NS-PLC-DC-ENV,NONE,2,no,server room cooling; overheats within hours
+NS-LAB-CONFLUENCE-01,NONE,168,no,throwaway lab wiki

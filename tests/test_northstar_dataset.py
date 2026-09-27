@@ -36,7 +36,7 @@ def ranked() -> dict[tuple[str, str], dict]:
 
 def test_dataset_matches_blueprint_scale():
     assets, findings, controls = read("assets.csv"), read("scanner.csv"), read("controls.csv")
-    assert len(assets) == 20
+    assert len(assets) == len(read("business_context.csv")) == 20
     assert len(findings) == 40
     assert len(controls) == 8
     assert sum(1 for a in assets if a["crown_jewel"] == "yes") == 4
@@ -95,7 +95,9 @@ def test_band_distribution_is_the_one_the_article_quotes():
                 read_asset_context(DATA / "asset_context.csv"),
                 RULES, load_snapshots(ROOT / "data" / "snapshots" / "nvd"))
     bands = Counter(r["priority"] for r in rows if r["decision"] == DECISION_SCORED)
-    assert dict(bands) == {"Critical": 8, "High": 22, "Medium": 8}
+    # Day 11 手標 criticality 時是 8/22/8；Day 13 改由業務事實推導後，四台資產的
+    # criticality 變了，分布跟著移動。數字變動要連同文章一起更新，不能悄悄漂移。
+    assert dict(bands) == {"Critical": 7, "High": 23, "Medium": 8}
     assert bands["Low"] == 0, "v0.1 公式在這家公司產不出 Low —— Day 18 校準的題目"
     assert sum(bands.values()) + 2 == len(rows) == 40
 
@@ -150,10 +152,15 @@ def test_context_is_derived_not_hand_written():
 
     from cve2action.normalization.exposure import derive_asset_context
 
-    derived = derive_asset_context(read("assets.csv"), read("controls.csv"), RULES,
-                                   date(2026, 9, 24))
+    from cve2action.normalization.business import derive_business_context
+
+    business = derive_business_context(read("business_context.csv"), RULES.business_impact)
+    assets = [dict(a, criticality=business[a["asset_id"]].value) for a in read("assets.csv")]
+    derived = derive_asset_context(assets, read("controls.csv"), RULES, date(2026, 9, 24))
+    for row in derived:
+        row["business_source"] = business[row["asset"]].source
+    assert derived == read("asset_context.csv")
     committed = read("asset_context.csv")
-    assert derived == committed
 
     sources = {r["reachability_source"] for r in committed}
     assert sources == {"zone:DMZ", "zone:APP", "zone:DATA", "zone:CORP", "zone:MGMT",

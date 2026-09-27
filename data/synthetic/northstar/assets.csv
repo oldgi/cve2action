@@ -1,4 +1,4 @@
-asset_id,hostname,zone,environment,business_role,criticality,crown_jewel,owner_team
+asset_id,hostname,zone,environment,business_role,declared_criticality,crown_jewel,owner_team
 NS-WEB-PORTAL-01,web-portal-01,DMZ,PROD,customer_portal,CRITICAL,no,platform-team
 NS-WEB-PORTAL-02,web-portal-02,DMZ,PROD,customer_portal,CRITICAL,no,platform-team
 NS-API-GW-01,api-gw-01,DMZ,PROD,api_gateway,CRITICAL,no,platform-team

@@ -65,6 +65,8 @@ class RiskRules:
     zone_reachability: dict[str, str] = field(default_factory=dict)
     # 控制證據的有效天數；超過就不能再拿它打折
     control_evidence_max_age_days: int = 90
+    # Business Criticality 的推導規則（Day 13）
+    business_impact: object | None = None
 
     def band_for(self, score: float) -> str:
         for band in self.priority_bands:

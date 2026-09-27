@@ -17,16 +17,19 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cve2action.collectors.nvd import load_snapshots  # noqa: E402
+from cve2action.normalization.business import derive_business_context  # noqa: E402
 from cve2action.normalization.exposure import derive_asset_context  # noqa: E402
 from cve2action.rules import load_rules  # noqa: E402
 
 OUT = ROOT / "data" / "synthetic" / "northstar"
 
-ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role", "criticality",
-                "crown_jewel", "owner_team"]
+ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role",
+                "declared_criticality", "crown_jewel", "owner_team"]
+BUSINESS_HEADER = ["asset_id", "data_class", "rto_hours", "customer_facing", "notes"]
 CONTROL_HEADER = ["asset_id", "control_type", "effectiveness", "evidence", "verified_at"]
 CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
-                  "business_criticality", "reachability_source", "control_source"]
+                  "business_criticality", "reachability_source", "control_source",
+                  "business_source"]
 
 # 虛構公司 Northstar Digital Services：20 項資產、4 項 Crown Jewel。
 # asset_id, hostname, zone, environment, business_role, criticality, crown_jewel, owner_team
@@ -51,6 +54,31 @@ ASSETS = [
     ("NS-OPS-WS-07", "ops-ws-07", "CORP", "PROD", "ops_workstation", "IMPORTANT", "no", "it-ops"),
     ("NS-PLC-DC-ENV", "plc-dc-env", "OT", "PROD", "datacenter_hvac", "IMPORTANT", "no", "facility-team"),
     ("NS-LAB-CONFLUENCE-01", "lab-confluence-01", "LAB", "NON_PROD", "lab_wiki", "NORMAL", "no", "platform-team"),
+]
+
+# 業務事實（Day 13）。criticality 不再手標，由這三欄推導。
+# asset_id, data_class, rto_hours, customer_facing, notes
+BUSINESS = [
+    ("NS-WEB-PORTAL-01", "INTERNAL", "2", "yes", "customer sign-in and self-service"),
+    ("NS-WEB-PORTAL-02", "INTERNAL", "2", "yes", "same service behind the load balancer"),
+    ("NS-API-GW-01", "INTERNAL", "2", "yes", "partner and mobile API entry point"),
+    ("NS-MAIL-GW-01", "CONFIDENTIAL", "8", "no", "internal mail; queues survive a short outage"),
+    ("NS-VPN-GW-01", "INTERNAL", "4", "no", "staff remote access; no customer traffic"),
+    ("NS-EDGE-RTR-01", "NONE", "1", "no", "all north-south traffic; nothing works without it"),
+    ("NS-APP-ORDER-01", "CONFIDENTIAL", "2", "yes", "order capture; downtime loses transactions"),
+    ("NS-APP-BILLING-01", "RESTRICTED", "4", "no", "handles cardholder and tax data"),
+    ("NS-APP-INTRANET-01", "INTERNAL", "48", "no", "staff wiki and forms; tolerable for two days"),
+    ("NS-APP-REPORT-01", "INTERNAL", "72", "no", "nightly management reports"),
+    ("NS-DB-CUSTOMER-01", "RESTRICTED", "2", "no", "personal data under contract and law"),
+    ("NS-DB-BILLING-01", "RESTRICTED", "4", "no", "billing records under audit scope"),
+    ("NS-BACKUP-01", "RESTRICTED", "24", "no", "holds copies of everything above"),
+    ("NS-FILE-SRV-01", "INTERNAL", "24", "no", "shared drives; a day offline stops several teams"),
+    ("NS-AD-DC-01", "CONFIDENTIAL", "1", "no", "authentication for every other system"),
+    ("NS-JUMP-01", "NONE", "4", "no", "no data of its own; without it nothing can be administered"),
+    ("NS-MON-01", "INTERNAL", "8", "no", "alerting; blind spot grows with every hour down"),
+    ("NS-OPS-WS-07", "INTERNAL", "24", "no", "one operator's endpoint; work can move to a spare"),
+    ("NS-PLC-DC-ENV", "NONE", "2", "no", "server room cooling; overheats within hours"),
+    ("NS-LAB-CONFLUENCE-01", "NONE", "168", "no", "throwaway lab wiki"),
 ]
 
 # 8 項已部署的控制措施；effectiveness 需要證據支撐，證明不了就是 UNKNOWN。
@@ -135,9 +163,19 @@ def main() -> None:
 
     write_csv("assets.csv", ASSET_HEADER, ASSETS)
     write_csv("controls.csv", CONTROL_HEADER, CONTROLS)
+    write_csv("business_context.csv", BUSINESS_HEADER, BUSINESS)
     asset_dicts = [dict(zip(ASSET_HEADER, row, strict=True)) for row in ASSETS]
     control_dicts = [dict(zip(CONTROL_HEADER, row, strict=True)) for row in CONTROLS]
+    business_dicts = [dict(zip(BUSINESS_HEADER, row, strict=True)) for row in BUSINESS]
+
+    # Business Criticality 由業務事實推導，取代 assets.csv 上人標的 declared_criticality
+    derived_business = derive_business_context(business_dicts, rules.business_impact)
+    for asset in asset_dicts:
+        asset["criticality"] = derived_business[asset["asset_id"]].value
+
     context = derive_asset_context(asset_dicts, control_dicts, rules, SCENARIO_AS_OF)
+    for row in context:
+        row["business_source"] = derived_business[row["asset"]].source
     write_csv("asset_context.csv", CONTEXT_HEADER,
               [tuple(row[col] for col in CONTEXT_HEADER) for row in context])
 
@@ -155,8 +193,14 @@ def main() -> None:
     write_csv("scanner.csv", ["asset", "cve", "cvss", "service"], rows)
 
     cves = sorted({cve for _a, cve, _s in FINDINGS})
+    disagreements = [(a["asset_id"], a["declared_criticality"], a["criticality"],
+                      derived_business[a["asset_id"]].source)
+                     for a in asset_dicts if a["declared_criticality"] != a["criticality"]]
     print(f"assets={len(ASSETS)} findings={len(FINDINGS)} controls={len(CONTROLS)} "
           f"crown_jewels={sum(1 for a in ASSETS if a[6] == 'yes')} distinct_cves={len(cves)}")
+    print(f"declared vs derived criticality: {len(disagreements)} disagreement(s)")
+    for asset_id, declared, derived, source in disagreements:
+        print(f"  {asset_id:<22} {declared:<10} -> {derived:<10} ({source})")
 
 
 if __name__ == "__main__":

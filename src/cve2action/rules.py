@@ -12,6 +12,7 @@ from pathlib import Path
 import yaml
 
 from .models import PriorityBand, RiskRules
+from .normalization.business import BusinessRules
 from .normalization.cvss import SUPPORTED_VERSIONS
 
 # v0.1 凍結值域（ADR-day-05）；risk_rules.yaml 只提供數值映射，不得增刪鍵
@@ -106,6 +107,37 @@ def _parse_exposure(raw: dict, reachability: dict[str, float]) -> tuple[dict[str
     return zones, max_age
 
 
+def _parse_business_impact(raw: dict, criticality: dict[str, float]) -> BusinessRules:
+    section = raw.get("business_impact")
+    if not isinstance(section, dict):
+        raise RulesError("risk_rules.yaml: missing 'business_impact' section")
+
+    data_class = section.get("data_class")
+    if not isinstance(data_class, dict) or not data_class:
+        raise RulesError("risk_rules.yaml: missing 'business_impact.data_class'")
+    mapped = {str(k).upper(): str(v).upper() for k, v in data_class.items()}
+
+    bands_raw = section.get("rto_hours")
+    if not isinstance(bands_raw, list) or not bands_raw:
+        raise RulesError("risk_rules.yaml: missing 'business_impact.rto_hours'")
+    bands = tuple(sorted(
+        ((float(b["within"]), str(b["criticality"]).upper()) for b in bands_raw),
+        key=lambda item: item[0],
+    ))
+    beyond = str(section.get("rto_beyond", "")).upper()
+    floor = str(section.get("customer_facing_floor", "")).upper()
+
+    declared = {v for _h, v in bands} | {beyond, floor} | set(mapped.values())
+    unknown = sorted(declared - set(criticality))
+    if unknown:
+        raise RulesError(
+            f"risk_rules.yaml: business_impact yields unknown criticality {unknown}; "
+            f"allowed {sorted(criticality)}"
+        )
+    return BusinessRules(data_class=mapped, rto_bands=bands, rto_beyond=beyond,
+                         customer_facing_floor=floor)
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -130,17 +162,18 @@ def load_rules(path: str | Path) -> RiskRules:
 
     reachability = _require_mapping(raw, "reachability", REQUIRED_REACHABILITY_KEYS)
     zones, max_age = _parse_exposure(raw, reachability)
+    criticality = _require_mapping(raw, "business_criticality", REQUIRED_BUSINESS_KEYS)
+    business = _parse_business_impact(raw, criticality)
 
     return RiskRules(
         version=str(raw.get("version", "unversioned")),
         weights=weights,
         reachability=reachability,
         control_effectiveness=control,
-        business_criticality=_require_mapping(
-            raw, "business_criticality", REQUIRED_BUSINESS_KEYS
-        ),
+        business_criticality=criticality,
         priority_bands=_parse_bands(raw),
         cvss_version_preference=_parse_cvss_preference(raw),
         zone_reachability=zones,
         control_evidence_max_age_days=max_age,
+        business_impact=business,
     )

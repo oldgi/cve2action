@@ -4,7 +4,7 @@
 # - 權重與映射外部化於此檔，不 hard-code；變更權重或門檻須新增/更新 ADR
 # - UNKNOWN 控制不得降低曝險（不知道，就不能假裝已有防護）
 # - Priority Score 僅用於排序與驗證，不宣稱事故機率或財務損失
-version: "0.1.2"
+version: "0.1.3"
 
 # 從 NVD 快照取 CVSS 時的版本偏好（Day 8，ADR-day-08）。
 # 先 3.1：與 Day 5 建立的驗收基準可比；只有 4.0 的 CVE 才退用 4.0。
@@ -32,6 +32,24 @@ exposure:
     LAB: ISOLATED
   # 控制證據的有效天數。過期不代表控制失效，但不能再拿它打折（降為 UNKNOWN）。
   control_evidence_max_age_days: 90
+
+# 業務衝擊（Day 13，ADR-day-13）。criticality 不再手標，由三項可查證的事實推導：
+# 存什麼資料、多久不能停、是否直接面對客戶。多個維度取最嚴重的一個——
+# 一台存放受管制資料的機器，就算停機容忍度很高，外洩的衝擊仍在。
+business_impact:
+  data_class:
+    RESTRICTED: CRITICAL      # 受法規或合約管制
+    CONFIDENTIAL: IMPORTANT   # 內部機密
+    INTERNAL: NORMAL
+    PUBLIC: NORMAL
+    NONE: NORMAL              # 不存業務資料
+  # 恢復時間目標：多久之內非復原不可
+  rto_hours:
+    - { within: 4, criticality: CRITICAL }
+    - { within: 24, criticality: IMPORTANT }
+  rto_beyond: NORMAL
+  # 直接面對客戶的系統，停機立刻被外部看見，至少 IMPORTANT
+  customer_facing_floor: IMPORTANT
 
 reachability:
   INTERNET: 1.0
