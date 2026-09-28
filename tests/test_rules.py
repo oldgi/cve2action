@@ -23,7 +23,8 @@ def dump(tmp_path: Path, raw: dict) -> Path:
 
 def test_baseline_rules_load():
     rules = load_rules(RULES_PATH)
-    assert rules.weights == {"severity": 0.50, "exposure": 0.25, "business": 0.25}
+    assert rules.weights == {"severity": 0.35, "threat": 0.15,
+                             "exposure": 0.25, "business": 0.25}
     assert rules.reachability["ISOLATED"] == 0.2
     assert rules.control_effectiveness["UNKNOWN"] == 1.0
     assert rules.band_for(9.40) == "Critical"

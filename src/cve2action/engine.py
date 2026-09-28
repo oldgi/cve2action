@@ -13,8 +13,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .models import DECISION_NEEDS_CONTEXT, DECISION_SCORED, RiskRules
+from .normalization.threat import derive_threat
 
 if TYPE_CHECKING:
+    from .collectors.epss import EpssRecord
+    from .collectors.kev import KevCatalog
     from .collectors.nvd import CveRecord
 
 
@@ -77,14 +80,22 @@ def score_finding(
     context: dict[str, Any] | None,
     rules: RiskRules,
     snapshot: CveRecord | None = None,
+    epss: EpssRecord | None = None,
+    kev: KevCatalog | None = None,
 ) -> dict[str, Any]:
-    """對單筆 finding 評分；回傳 ranked_result 的一列（dict）。"""
+    """對單筆 finding 評分；回傳 ranked_result 的一列（dict）。
+
+    沒有任何威脅資料時，威脅項整個移除、其餘權重重新正規化——不補零，
+    因為零代表「確定沒有威脅」，那是我們不知道的事。
+    """
     row: dict[str, Any] = {
         "asset": finding.get("asset"),
         "cve": finding.get("cve"),
         "cvss": finding.get("cvss"),
         "cvss_version": "",
         "cvss_source": "",
+        "threat": "",
+        "threat_source": "",
         "environment": "",
         "effective_exposure": "",
         "business_criticality": "",
@@ -138,15 +149,22 @@ def score_finding(
     severity = cvss / 10.0
     exposure = round(reach_value * control_value, 4)
     weights = rules.weights
-    score = round(
-        10.0
-        * (
-            weights["severity"] * severity
-            + weights["exposure"] * exposure
-            + weights["business"] * business_value
-        ),
-        2,
-    )
+
+    cve_id = str(finding.get("cve", "")).strip().upper()
+    threat = derive_threat(epss, kev.get(cve_id) if kev else None,
+                           kev is not None, rules.threat) if rules.threat else None
+    terms = {"severity": severity, "exposure": exposure, "business": business_value}
+    applied = dict(weights)
+    if threat is not None:
+        terms["threat"] = float(threat.value)
+        row["threat"] = terms["threat"]
+        row["threat_source"] = threat.source
+    else:
+        # 威脅項缺席時，它的權重退回 severity——不是按比例分給所有人。
+        # CVSS 的可利用性指標本來就兼著回答「會不會被利用」；沒有 EPSS/KEV 時它繼續兼，
+        # 於是公式退回 Day 5 的 50/25/25，先前建立的基準不受影響。
+        applied["severity"] = weights["severity"] + weights["threat"]
+    score = round(10.0 * sum(applied[name] * value for name, value in terms.items()), 2)
 
     row["effective_exposure"] = exposure
     row["priority_score"] = score
@@ -155,12 +173,13 @@ def score_finding(
     cvss_label = f"v{cvss_version} {cvss_source}" if cvss_version else cvss_source
     if cvss_note:
         cvss_label += f", {cvss_note}"
+    threat_text = (f"T={terms['threat']:g} [{threat.source}]; " if threat is not None
+                   else "T=n/a [no threat data, weight redistributed]; ")
     row["reason"] = (
-        f"CVSS {cvss:g} [{cvss_label}] (S={severity:g}); "
+        f"CVSS {cvss:g} [{cvss_label}] (S={severity:g}); " + threat_text +
         f"{context['reachability']} x {context['control_effectiveness']} -> E={exposure:g}; "
         f"{context['business_criticality']} -> B={business_value:g}; "
-        f"score=10x({weights['severity']:g}xS+{weights['exposure']:g}xE"
-        f"+{weights['business']:g}xB)={score:g} [{row['priority']}]"
+        f"score={score:g} [{row['priority']}]"
     )
     return row
 
@@ -170,18 +189,22 @@ def rank(
     contexts: dict[str, dict[str, Any]],
     rules: RiskRules,
     snapshots: dict[str, CveRecord] | None = None,
+    epss: dict[str, EpssRecord] | None = None,
+    kev: KevCatalog | None = None,
 ) -> list[dict[str, Any]]:
     """全部評分後排序：SCORED 依分數降冪在前，NEEDS_CONTEXT 保留在最後。
 
     `snapshots` 以 CVE 編號（大寫）為鍵；給了就用有來源的分數取代掃描器手填值。
     """
-    snapshots = snapshots or {}
+    snapshots, epss = snapshots or {}, epss or {}
     rows = [
         score_finding(
             f,
             contexts.get(str(f.get("asset"))),
             rules,
             snapshots.get(str(f.get("cve", "")).strip().upper()),
+            epss.get(str(f.get("cve", "")).strip().upper()),
+            kev,
         )
         for f in findings
     ]

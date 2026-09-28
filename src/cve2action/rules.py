@@ -14,9 +14,10 @@ import yaml
 from .models import PriorityBand, RiskRules
 from .normalization.business import BusinessRules
 from .normalization.cvss import SUPPORTED_VERSIONS
+from .normalization.threat import ThreatRules
 
 # v0.1 凍結值域（ADR-day-05）；risk_rules.yaml 只提供數值映射，不得增刪鍵
-REQUIRED_WEIGHT_KEYS = frozenset({"severity", "exposure", "business"})
+REQUIRED_WEIGHT_KEYS = frozenset({"severity", "threat", "exposure", "business"})
 REQUIRED_REACHABILITY_KEYS = frozenset({"INTERNET", "INTERNAL", "ISOLATED"})
 REQUIRED_CONTROL_KEYS = frozenset({"NONE", "PARTIAL", "STRONG", "UNKNOWN"})
 REQUIRED_BUSINESS_KEYS = frozenset({"CRITICAL", "IMPORTANT", "NORMAL"})
@@ -138,6 +139,19 @@ def _parse_business_impact(raw: dict, criticality: dict[str, float]) -> Business
                          customer_facing_floor=floor)
 
 
+def _parse_threat(raw: dict) -> ThreatRules:
+    section = raw.get("threat")
+    if not isinstance(section, dict):
+        raise RulesError("risk_rules.yaml: missing 'threat' section")
+    base = section.get("epss_log_base")
+    kev = section.get("kev_listed_value")
+    if not isinstance(base, (int, float)) or base <= 0:
+        raise RulesError("risk_rules.yaml: 'threat.epss_log_base' must be a positive number")
+    if not isinstance(kev, (int, float)) or not 0.0 <= kev <= 1.0:
+        raise RulesError("risk_rules.yaml: 'threat.kev_listed_value' must be within 0-1")
+    return ThreatRules(epss_log_base=float(base), kev_listed_value=float(kev))
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -164,6 +178,7 @@ def load_rules(path: str | Path) -> RiskRules:
     zones, max_age = _parse_exposure(raw, reachability)
     criticality = _require_mapping(raw, "business_criticality", REQUIRED_BUSINESS_KEYS)
     business = _parse_business_impact(raw, criticality)
+    threat = _parse_threat(raw)
 
     return RiskRules(
         version=str(raw.get("version", "unversioned")),
@@ -176,4 +191,5 @@ def load_rules(path: str | Path) -> RiskRules:
         zone_reachability=zones,
         control_evidence_max_age_days=max_age,
         business_impact=business,
+        threat=threat,
     )

@@ -27,6 +27,8 @@ OUTPUT_COLUMNS = (
     "cvss",
     "cvss_version",
     "cvss_source",
+    "threat",
+    "threat_source",
     "environment",
     "effective_exposure",
     "business_criticality",
@@ -67,6 +69,8 @@ class RiskRules:
     control_evidence_max_age_days: int = 90
     # Business Criticality 的推導規則（Day 13）
     business_impact: object | None = None
+    # EPSS/KEV 的正規化規則（Day 14）
+    threat: object | None = None
 
     def band_for(self, score: float) -> str:
         for band in self.priority_bands:

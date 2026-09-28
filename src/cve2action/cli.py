@@ -11,8 +11,9 @@ from pathlib import Path
 from . import __version__
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
 from .collectors.epss import EpssError, get_epss_many
+from .collectors.epss import load_snapshots as load_epss_snapshots
 from .collectors.kev import DEFAULT_CACHE_DIR as KEV_CACHE_DIR
-from .collectors.kev import KEV_LISTED, KevError, get_catalog
+from .collectors.kev import KEV_LISTED, KevError, get_catalog, load_catalog
 from .collectors.nvd import (
     CVSS_UNKNOWN,
     DEFAULT_CACHE_DIR,
@@ -48,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     rank_parser.add_argument(
         "--snapshots", help="NVD 快照目錄；給了就用有來源的 CVSS 取代掃描器手填值"
     )
+    rank_parser.add_argument("--epss", help="EPSS 快照目錄；給了才會有威脅項")
+    rank_parser.add_argument("--kev", help="KEV 目錄快照所在目錄；給了才會有威脅項")
 
     fetch_parser = subparsers.add_parser(
         "fetch-cve", help="從 NVD 取得 CVE/CVSS 並寫成帶日期的快照"
@@ -257,16 +260,24 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     snapshots = load_snapshots(args.snapshots) if args.snapshots else {}
-    rows = rank(findings, contexts, rules, snapshots)
+    epss_records = load_epss_snapshots(args.epss) if args.epss else {}
+    kev_catalog = load_catalog(args.kev) if args.kev else None
+    if args.kev and kev_catalog is None:
+        print(f"error: no KEV catalog under {args.kev}", file=sys.stderr)
+        return 2
+    rows = rank(findings, contexts, rules, snapshots, epss_records, kev_catalog)
     write_ranked_result(rows, args.out)
 
     scored = sum(1 for r in rows if r["decision"] != DECISION_NEEDS_CONTEXT)
     pending = len(rows) - scored
     sourced = sum(1 for r in rows if str(r["cvss_source"]).startswith("nvd"))
     print(f"ranked {scored} finding(s), {pending} NEEDS_CONTEXT -> {args.out}")
+    threatened = sum(1 for r in rows if r["threat"] != "")
     print(f"rules: {args.rules} (version {rules.version}); "
           f"cvss from nvd: {sourced}/{len(rows)}"
           + (f" (preference {list(rules.cvss_version_preference)})" if snapshots else ""))
+    print(f"threat input on {threatened}/{len(rows)} row(s)"
+          + ("" if threatened else "; threat weight redistributed to severity"))
     return 0
 
 
