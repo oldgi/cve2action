@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 `normalization/threat.py`：Threat 由 EPSS 與 KEV 推導——EPSS 先做對數轉換（`ln(1+99p)/ln(1+99)`）把偏斜的低端拉開，再與 KEV（收錄＝1.0）**取最大值**而非平均，因為兩者回答的不是同一個問題（EPSS 預測未來三十天的廣度，KEV 記錄過去已確認的事實）；`threat_source` 記錄勝出來源與落敗的一方（例 `kev:LISTED (over epss:0.0171)`）。完全沒有威脅資料時不補零，威脅項整個移除。ADR-day-14 記錄規則。
 - 新增 `normalization/business.py` 與 `business_context.csv`：Business Criticality 改由三項可查證事實推導（`data_class`、`rto_hours`、`customer_facing`），多維度取最嚴重者而非平均，缺事實則報錯；輸出新增 `business_source` 說明哪個維度勝出。ADR-day-13 記錄規則。
 - 新增 `normalization/exposure.py`：Reachability 由 Zone 推導（`risk_rules.yaml` 的 `exposure.zone_reachability`，可被觀測值覆寫）、Control Effectiveness 由 `controls.csv` 推導並套用證據有效期；每個值附 `reachability_source`／`control_source` 說明來源。新增 CLI `cve2action derive-context` 與 23 個測試，ADR-day-12 記錄規則。
 - 新增 Northstar Digital Services 模擬資料集（藍圖 §8.2 規模：20 資產、40 findings、8 控制、4 Crown Jewel）與建置腳本 `scripts/build_northstar.py`；CVSS 全部取自 NVD 快照而非手填，離線重建輸出逐位元組相同，並以 17 個測試涵蓋規模、值域、無真實企業資訊與四個必測情境。
@@ -33,6 +34,8 @@
 
 ### Changed
 
+- 評分公式加入威脅項：`Priority = 10 × (0.35·S + 0.15·T + 0.25·E + 0.25·B)`。權重從 severity 挪出 0.15，曝險與業務不動——拆的是「漏洞本身」那一半裡「多嚴重」與「多可能」。無威脅資料時該權重**退回 severity**（非按比例重分配），公式精確退化為 Day 5 的 50/25/25，先前所有基準不變。
+- 補抓五筆弱掃雜訊 CVE 的 EPSS 快照後結論反轉：Logjam（CVSS 3.7、EPSS 0.9997）6.85→7.79 升 High、RC4 6.45→7.01 升 High、OpenSSL padding 7.20→7.78。優先序分布由 7/23/8 變為 8/25/5，四筆跨分級。缺資料不會報錯，只會給出看起來合理的錯答案。
 - `assets.csv` 的 `criticality` 更名為 `declared_criticality`，僅作對照；引擎改用推導值。二十台資產中四台不一致（郵件閘道 CRITICAL→IMPORTANT、內部 wiki IMPORTANT→NORMAL、檔案伺服器 NORMAL→IMPORTANT、機房環控 PLC IMPORTANT→CRITICAL），優先序分布由 8/22/8 變為 7/23/8。
 - 控制證據超過 `exposure.control_evidence_max_age_days`（v0.1 為 90 天）即不可用於折減，該控制降為 `UNKNOWN` 而非 `NONE`；多個控制取效果最強者，不相乘。`asset_context.csv` 新增兩個來源欄位，推導結果與 Day 11 手寫版的四個決策欄位完全相同。
 - NVD collector 請求間隔由 6.5 秒調整為 7.5 秒，並在遭遇 429 時退避重試一次——6.5 秒仍會觸發「30 秒 5 次」的滾動窗限制。
