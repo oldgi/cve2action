@@ -4,10 +4,13 @@ import csv
 import subprocess
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 import pytest
 
+from cve2action.collectors.epss import load_snapshots as load_epss_snapshots
+from cve2action.collectors.kev import load_catalog
 from cve2action.collectors.nvd import load_snapshots
 from cve2action.engine import rank
 from cve2action.io import read_asset_context, read_scanner
@@ -100,6 +103,55 @@ def test_band_distribution_is_the_one_the_article_quotes():
     assert dict(bands) == {"Critical": 7, "High": 23, "Medium": 8}
     assert bands["Low"] == 0, "v0.1 公式在這家公司產不出 Low —— Day 18 校準的題目"
     assert sum(bands.values()) + 2 == len(rows) == 40
+
+
+def _rank_all(**extra) -> list[dict]:
+    """完整輸入的一次評分：快照 + EPSS + KEV，外加呼叫端指定的部分。"""
+    snapshots = ROOT / "data" / "snapshots"
+    return rank(read_scanner(DATA / "scanner.csv"),
+                read_asset_context(DATA / "asset_context.csv"),
+                RULES, load_snapshots(snapshots / "nvd"),
+                load_epss_snapshots(snapshots / "epss"), load_catalog(snapshots / "kev"),
+                **extra)
+
+
+def test_threat_and_control_distributions_are_the_ones_the_articles_quote():
+    """Day 14 與 Day 15 的文章各引用一組分布；兩組都鎖起來，改動不能悄悄漂移。"""
+    def bands(rows):
+        return dict(Counter(r["priority"] for r in rows if r["decision"] == DECISION_SCORED))
+
+    # Day 14：加入威脅項後
+    assert bands(_rank_all()) == {"Critical": 8, "High": 25, "Medium": 5}
+    # Day 15：再加上控制適用性——攔不到的控制不折減，五筆分數回升
+    assert bands(_rank_all(controls=read("controls.csv"), as_of=date(2026, 9, 24))) == {
+        "Critical": 9, "High": 24, "Medium": 5,
+    }
+
+
+def test_the_same_control_can_apply_to_one_finding_and_not_the_other():
+    """同一台 AD DC、同一項 MFA 分層控制，差別只在攻擊路徑上有沒有帳號這一關。"""
+    rows = _rank_all(controls=read("controls.csv"), as_of=date(2026, 9, 24))
+    by_cve = {r["cve"]: r for r in rows if r["asset"] == "NS-AD-DC-01"}
+
+    zerologon = by_cve["CVE-2020-1472"]        # AV:N / PR:N —— 不需要驗證
+    assert zerologon["control_effectiveness"] == "NONE"
+    assert "PR:NONE" in zerologon["control_source"]
+    assert zerologon["priority_score"] == 9.0
+
+    printnightmare = by_cve["CVE-2021-34527"]  # AV:N / PR:L —— 路徑上有帳號
+    assert printnightmare["control_effectiveness"] == "STRONG"
+    assert printnightmare["priority_score"] == 7.68
+
+
+def test_segmentation_does_not_discount_local_privilege_escalation():
+    """網段隔離攔不到本機提權；「誰到得了這台機器」已經由 reachability 算過一次。"""
+    rows = _rank_all(controls=read("controls.csv"), as_of=date(2026, 9, 24))
+    segmented = {"NS-DB-CUSTOMER-01", "NS-DB-BILLING-01"}
+    local = [r for r in rows if r["asset"] in segmented]
+    assert len(local) == 3  # Dirty COW、sudo、Dirty Pipe，三筆都是 AV:L
+    for row in local:
+        assert row["control_effectiveness"] == "NONE"
+        assert "not applicable to AV:LOCAL" in row["control_source"]
 
 
 def test_the_two_gaps_are_needs_context_not_guesses(ranked):

@@ -13,6 +13,7 @@ import yaml
 
 from .models import PriorityBand, RiskRules
 from .normalization.business import BusinessRules
+from .normalization.control import ControlRules, ControlRulesError, parse_control_rules
 from .normalization.cvss import SUPPORTED_VERSIONS
 from .normalization.threat import ThreatRules
 
@@ -152,6 +153,13 @@ def _parse_threat(raw: dict) -> ThreatRules:
     return ThreatRules(epss_log_base=float(base), kev_listed_value=float(kev))
 
 
+def _parse_controls(raw: dict) -> ControlRules:
+    try:
+        return parse_control_rules(raw.get("controls"))
+    except ControlRulesError as error:
+        raise RulesError(str(error)) from error
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -192,4 +200,5 @@ def load_rules(path: str | Path) -> RiskRules:
         control_evidence_max_age_days=max_age,
         business_impact=business,
         threat=threat,
+        controls=_parse_controls(raw),
     )

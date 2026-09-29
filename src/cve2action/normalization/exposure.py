@@ -20,6 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from .control import APPLICABLE, NOT_APPLICABLE, Attack
+from .control import applicability as control_applicability
+
 CONTROL_UNKNOWN = "UNKNOWN"
 CONTROL_NONE = "NONE"
 
@@ -63,12 +66,16 @@ def _evidence_age_days(verified_at: str, as_of: date) -> int | None:
         return None
 
 
-def derive_control_effectiveness(asset_id: str, controls: list[dict], rules,
-                                 as_of: date) -> Derived:
+def derive_control_effectiveness(asset_id: str, controls: list[dict], rules, as_of: date,
+                                 attack: Attack | None = None,
+                                 check_applicability: bool = False) -> Derived:
     """合併一台資產上的所有控制；沒有可用證據時回 NONE，證據過期回 UNKNOWN。
 
     只比較「有證據且未過期」的控制，取折減效果最強的那一個。UNKNOWN 的控制不參與比較，
     也不懲罰其他有證據的控制——不知道某項防護有沒有效，不代表別項的證據失效。
+
+    `check_applicability`（Day 15）打開時先過一次適用性：攔截點不在這條攻擊路徑上的控制，
+    不論證據多新、強度多高，都不參與折減；`attack` 讀不出來就是無法判斷，同樣不折減。
     """
     mine = [c for c in controls if c.get("asset_id") == asset_id]
     if not mine:
@@ -76,6 +83,7 @@ def derive_control_effectiveness(asset_id: str, controls: list[dict], rules,
 
     usable: list[tuple[float, str, str]] = []  # (係數, 值, 來源)
     stale: list[str] = []
+    inapplicable: list[str] = []
     for control in mine:
         effectiveness = str(control.get("effectiveness", "")).strip().upper()
         kind = control.get("control_type", "control")
@@ -93,14 +101,33 @@ def derive_control_effectiveness(asset_id: str, controls: list[dict], rules,
         if effectiveness == CONTROL_UNKNOWN:
             stale.append(f"control:{kind}@{verified} (unproven)")
             continue
-        usable.append((factor, effectiveness, f"control:{kind}@{verified}"))
+        verdict, why = _applicability(kind, attack, rules, check_applicability)
+        if verdict != APPLICABLE:
+            bucket = inapplicable if verdict == NOT_APPLICABLE else stale
+            bucket.append(f"control:{kind}@{verified} ({why})")
+            continue
+        label = f"control:{kind}@{verified}"
+        usable.append((factor, effectiveness, f"{label} ({why})" if why else label))
 
     if usable:
         # 係數愈小折減愈多；取最強的一個，不相乘
         factor, value, source = min(usable, key=lambda item: item[0])
         return Derived(value, source)
+    if inapplicable and not stale:
+        # 控制有效，只是攔不到這一類攻擊——這是事實，不是未知
+        return Derived(CONTROL_NONE, "; ".join(inapplicable))
     # 有登錄控制但沒有一項拿得出有效證據：UNKNOWN，不是 NONE
-    return Derived(CONTROL_UNKNOWN, "; ".join(stale) if stale else "no-usable-evidence")
+    notes = stale + inapplicable
+    return Derived(CONTROL_UNKNOWN, "; ".join(notes) if notes else "no-usable-evidence")
+
+
+def _applicability(kind: str, attack: Attack | None, rules,
+                   evaluate: bool) -> tuple[str, str]:
+    """資產層的推導（Day 12）不看適用性；逐筆評分（Day 15）才看。"""
+    control_rules = getattr(rules, "controls", None)
+    if not evaluate or control_rules is None:
+        return APPLICABLE, ""
+    return control_applicability(kind, attack, control_rules)
 
 
 def derive_asset_context(assets: list[dict], controls: list[dict], rules, as_of: date,

@@ -4,7 +4,7 @@
 # - 權重與映射外部化於此檔，不 hard-code；變更權重或門檻須新增/更新 ADR
 # - UNKNOWN 控制不得降低曝險（不知道，就不能假裝已有防護）
 # - Priority Score 僅用於排序與驗證，不宣稱事故機率或財務損失
-version: "0.2.0"
+version: "0.3.0"
 
 # 從 NVD 快照取 CVSS 時的版本偏好（Day 8，ADR-day-08）。
 # 先 3.1：與 Day 5 建立的驗收基準可比；只有 4.0 的 CVE 才退用 4.0。
@@ -49,6 +49,31 @@ exposure:
   # 控制證據的有效天數。過期不代表控制失效，但不能再拿它打折（降為 UNKNOWN）。
   control_evidence_max_age_days: 90
 
+# 控制措施的適用範圍（Day 15，ADR-day-15）。
+#
+# 一項控制要能折減風險，得先證明它的攔截點落在這條攻擊路徑上：調校過的 WAF 攔不到
+# 本機的 sudo 提權，管理員 MFA 攔不到不需要驗證的 Netlogon 繞過。判斷只用 CVSS 向量裡
+# 兩個可查證的欄位，不另外發明欄位：
+#   AV —— 攻擊從哪裡來；PR —— 這條路徑上有沒有「驗證」這一關（PR:N 代表沒有）。
+# 判斷結果為三態：適用（套用強度）、不適用（已知攔不到，不折減）、無法判斷（同樣不折減）。
+#
+# 網段隔離對 AV:L 標為不適用，不是說隔離沒用——「誰到得了這台機器」已經由
+# Reachability 算過一次了，再從 Control 扣一次是同一項控制在同一條公式裡算兩次。
+controls:
+  applicability:
+    waf:
+      attack_vectors: [NETWORK]           # 只看得到送進來的應用層請求
+    network_segmentation:
+      attack_vectors: [NETWORK, ADJACENT_NETWORK]
+    edr:
+      attack_vectors: [NETWORK, ADJACENT_NETWORK, LOCAL, PHYSICAL]  # 端點上的行為都看得到
+    mfa:
+      attack_vectors: [NETWORK, ADJACENT_NETWORK]
+      requires_authentication: true       # 攻擊不必驗證就走得到時，MFA 沒有位置可站
+    mfa_admin_tiering:
+      attack_vectors: [NETWORK, ADJACENT_NETWORK, LOCAL]
+      requires_authentication: true
+
 # 業務衝擊（Day 13，ADR-day-13）。criticality 不再手標，由三項可查證的事實推導：
 # 存什麼資料、多久不能停、是否直接面對客戶。多個維度取最嚴重的一個——
 # 一台存放受管制資料的機器，就算停機容忍度很高，外洩的衝擊仍在。
@@ -72,6 +97,15 @@ reachability:
   INTERNAL: 0.6
   ISOLATED: 0.2
 
+# 殘餘攻擊面的「序」，不是攔截成功率——沒有人能宣稱一個 WAF 攔得下六成攻擊。
+# 每一級綁在可查證的證據門檻上，證據等級決定係數，不是由感覺決定：
+#   STRONG  —— 有針對此攻擊類別的阻擋證據（negative test、bypass test）
+#   PARTIAL —— 只有偵測、或規則未針對此應用調校，沒有阻擋證據
+#   NONE    —— 沒有控制，或現有控制對這條攻擊路徑不適用
+#   UNKNOWN —— 有控制但拿不出證據
+# 折減上限刻意壓在 0.4：最強的控制最多把單筆 finding 往下移一個分級，不可能靠一項
+# 補償控制把 Critical 直接壓成 Medium（10×0.25×0.6=1.5 分 < 跨兩級所需的 2.01 分）。
+# 這條性質有回歸測試守著；三個數字本身要到 Day 17 用人工排序校準。
 control_effectiveness:
   NONE: 1.0
   PARTIAL: 0.7

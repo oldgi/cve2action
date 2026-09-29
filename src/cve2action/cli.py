@@ -51,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rank_parser.add_argument("--epss", help="EPSS 快照目錄；給了才會有威脅項")
     rank_parser.add_argument("--kev", help="KEV 目錄快照所在目錄；給了才會有威脅項")
+    rank_parser.add_argument(
+        "--controls", help="控制措施 CSV；給了就逐筆檢查控制攔不攔得到該漏洞（Day 15）"
+    )
+    rank_parser.add_argument(
+        "--as-of", default=str(date.today()), help="控制證據的評估基準日（YYYY-MM-DD）"
+    )
 
     fetch_parser = subparsers.add_parser(
         "fetch-cve", help="從 NVD 取得 CVE/CVSS 並寫成帶日期的快照"
@@ -255,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
         contexts = read_asset_context(args.context)
-    except (RulesError, InputError, FileNotFoundError) as error:
+        controls = _read_rows(args.controls) if args.controls else None
+        as_of = date.fromisoformat(args.as_of)
+    except (RulesError, InputError, ValueError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
@@ -265,7 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.kev and kev_catalog is None:
         print(f"error: no KEV catalog under {args.kev}", file=sys.stderr)
         return 2
-    rows = rank(findings, contexts, rules, snapshots, epss_records, kev_catalog)
+    rows = rank(findings, contexts, rules, snapshots, epss_records, kev_catalog,
+                controls, as_of)
     write_ranked_result(rows, args.out)
 
     scored = sum(1 for r in rows if r["decision"] != DECISION_NEEDS_CONTEXT)
@@ -278,6 +287,13 @@ def main(argv: list[str] | None = None) -> int:
           + (f" (preference {list(rules.cvss_version_preference)})" if snapshots else ""))
     print(f"threat input on {threatened}/{len(rows)} row(s)"
           + ("" if threatened else "; threat weight redistributed to severity"))
+    if controls is not None:
+        revoked = sum(1 for r in rows if "not applicable" in str(r["control_source"])
+                      or "no authentication" in str(r["control_source"]))
+        discounted = sum(1 for r in rows
+                         if str(r["control_effectiveness"]) in ("PARTIAL", "STRONG"))
+        print(f"controls: {discounted} row(s) discounted, {revoked} revoked as inapplicable "
+              f"(evidence as of {as_of})")
     return 0
 
 

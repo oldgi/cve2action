@@ -30,6 +30,8 @@ OUTPUT_COLUMNS = (
     "threat",
     "threat_source",
     "environment",
+    "control_effectiveness",
+    "control_source",
     "effective_exposure",
     "business_criticality",
     "priority_score",
@@ -71,6 +73,8 @@ class RiskRules:
     business_impact: object | None = None
     # EPSS/KEV 的正規化規則（Day 14）
     threat: object | None = None
+    # 控制措施的適用範圍（Day 15）：攔截點不在攻擊路徑上的控制不得折減
+    controls: object | None = None
 
     def band_for(self, score: float) -> str:
         for band in self.priority_bands:

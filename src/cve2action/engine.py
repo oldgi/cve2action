@@ -10,9 +10,12 @@ Priority Score = 10 × (wS×S + wE×E + wB×B)
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from .models import DECISION_NEEDS_CONTEXT, DECISION_SCORED, RiskRules
+from .normalization.control import parse_attack
+from .normalization.exposure import derive_control_effectiveness
 from .normalization.threat import derive_threat
 
 if TYPE_CHECKING:
@@ -75,6 +78,14 @@ def _resolve_cvss(
     return scanner_value, "", "scanner", None, ""
 
 
+def _chosen_vector(snapshot: CveRecord | None, rules: RiskRules) -> str | None:
+    """本列實際採用的那一版 CVSS 的 vector，Day 15 用來讀 AV/PR。"""
+    if snapshot is None:
+        return None
+    chosen = snapshot.cvss.preferred(rules.cvss_version_preference)
+    return chosen.vector if chosen is not None else None
+
+
 def score_finding(
     finding: dict[str, Any],
     context: dict[str, Any] | None,
@@ -82,6 +93,8 @@ def score_finding(
     snapshot: CveRecord | None = None,
     epss: EpssRecord | None = None,
     kev: KevCatalog | None = None,
+    controls: list[dict[str, Any]] | None = None,
+    as_of: date | None = None,
 ) -> dict[str, Any]:
     """對單筆 finding 評分；回傳 ranked_result 的一列（dict）。
 
@@ -97,6 +110,8 @@ def score_finding(
         "threat": "",
         "threat_source": "",
         "environment": "",
+        "control_effectiveness": "",
+        "control_source": "",
         "effective_exposure": "",
         "business_criticality": "",
         "priority_score": "",
@@ -146,6 +161,22 @@ def score_finding(
 
     assert cvss is not None and reach_value is not None
     assert control_value is not None and business_value is not None
+
+    control_label = str(context["control_effectiveness"])
+    control_source = str(context.get("control_source", "asset_context"))
+    control_note = ""
+    if controls is not None:
+        # Day 15：控制的折減資格逐筆重算——攔截點不在這條攻擊路徑上就不算數
+        derived = derive_control_effectiveness(
+            str(finding.get("asset")), controls, rules, as_of or date.today(),
+            parse_attack(_chosen_vector(snapshot, rules)), check_applicability=True,
+        )
+        control_label, control_source = derived.value, derived.source
+        control_value = rules.control_effectiveness[derived.value]
+        control_note = f" [{control_source}]"
+    row["control_effectiveness"] = control_label
+    row["control_source"] = control_source
+
     severity = cvss / 10.0
     exposure = round(reach_value * control_value, 4)
     weights = rules.weights
@@ -177,7 +208,7 @@ def score_finding(
                    else "T=n/a [no threat data, weight redistributed]; ")
     row["reason"] = (
         f"CVSS {cvss:g} [{cvss_label}] (S={severity:g}); " + threat_text +
-        f"{context['reachability']} x {context['control_effectiveness']} -> E={exposure:g}; "
+        f"{context['reachability']} x {control_label}{control_note} -> E={exposure:g}; "
         f"{context['business_criticality']} -> B={business_value:g}; "
         f"score={score:g} [{row['priority']}]"
     )
@@ -191,6 +222,8 @@ def rank(
     snapshots: dict[str, CveRecord] | None = None,
     epss: dict[str, EpssRecord] | None = None,
     kev: KevCatalog | None = None,
+    controls: list[dict[str, Any]] | None = None,
+    as_of: date | None = None,
 ) -> list[dict[str, Any]]:
     """全部評分後排序：SCORED 依分數降冪在前，NEEDS_CONTEXT 保留在最後。
 
@@ -205,6 +238,8 @@ def rank(
             snapshots.get(str(f.get("cve", "")).strip().upper()),
             epss.get(str(f.get("cve", "")).strip().upper()),
             kev,
+            controls,
+            as_of,
         )
         for f in findings
     ]
