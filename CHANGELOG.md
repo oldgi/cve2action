@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 `normalization/control.py`：控制措施的**適用性先於強度**。一項控制要參與折減，得先證明攔截點落在這條攻擊路徑上，判斷只讀 CVSS 向量既有的 AV（攻擊從哪來）與 PR（路徑上有沒有驗證這一關），不新增人工欄位。結果採三態：APPLICABLE（套用強度）、NOT_APPLICABLE（已知攔不到，是事實）、UNDECIDABLE（讀不到向量，是未知）；後兩者都不折減但 `control_source` 記錄不同理由。適用範圍外部化於 `controls.applicability`，新增 `rank --controls/--as-of` 與 31 個測試，ADR-day-15 記錄規則。
 - 新增 `normalization/threat.py`：Threat 由 EPSS 與 KEV 推導——EPSS 先做對數轉換（`ln(1+99p)/ln(1+99)`）把偏斜的低端拉開，再與 KEV（收錄＝1.0）**取最大值**而非平均，因為兩者回答的不是同一個問題（EPSS 預測未來三十天的廣度，KEV 記錄過去已確認的事實）；`threat_source` 記錄勝出來源與落敗的一方（例 `kev:LISTED (over epss:0.0171)`）。完全沒有威脅資料時不補零，威脅項整個移除。ADR-day-14 記錄規則。
 - 新增 `normalization/business.py` 與 `business_context.csv`：Business Criticality 改由三項可查證事實推導（`data_class`、`rto_hours`、`customer_facing`），多維度取最嚴重者而非平均，缺事實則報錯；輸出新增 `business_source` 說明哪個維度勝出。ADR-day-13 記錄規則。
 - 新增 `normalization/exposure.py`：Reachability 由 Zone 推導（`risk_rules.yaml` 的 `exposure.zone_reachability`，可被觀測值覆寫）、Control Effectiveness 由 `controls.csv` 推導並套用證據有效期；每個值附 `reachability_source`／`control_source` 說明來源。新增 CLI `cve2action derive-context` 與 23 個測試，ADR-day-12 記錄規則。
@@ -34,6 +35,9 @@
 
 ### Changed
 
+- Control Effectiveness 由資產層改為逐筆推導：Northstar 38 筆評分中 9 筆維持折減、5 筆撤銷（3 筆網段隔離對 `AV:L`、2 筆驗證類控制對 `PR:N`），分布由 8/25/5 變 9/24/5；Zerologon 由 8.10 High 回到 9.00 Critical，同一台 AD DC 上的 PrintNightmare 仍保有折減（7.68 High）。`derive-context` 產出的資產層視圖維持 Day 12 行為不變。
+- 折減上限 0.4 綁定一條可測性質並加上回歸測試：單一控制最多讓一筆 finding 往下移一個分級（最大折減 1.5 分 < 跨兩級所需的 2.01 分）。`control_effectiveness` 四級改以證據門檻定義，不再只是三個數字。
+- `ranked_result.csv` 新增 `control_effectiveness` 與 `control_source` 兩欄。
 - 評分公式加入威脅項：`Priority = 10 × (0.35·S + 0.15·T + 0.25·E + 0.25·B)`。權重從 severity 挪出 0.15，曝險與業務不動——拆的是「漏洞本身」那一半裡「多嚴重」與「多可能」。無威脅資料時該權重**退回 severity**（非按比例重分配），公式精確退化為 Day 5 的 50/25/25，先前所有基準不變。
 - 補抓五筆弱掃雜訊 CVE 的 EPSS 快照後結論反轉：Logjam（CVSS 3.7、EPSS 0.9997）6.85→7.79 升 High、RC4 6.45→7.01 升 High、OpenSSL padding 7.20→7.78。優先序分布由 7/23/8 變為 8/25/5，四筆跨分級。缺資料不會報錯，只會給出看起來合理的錯答案。
 - `assets.csv` 的 `criticality` 更名為 `declared_criticality`，僅作對照；引擎改用推導值。二十台資產中四台不一致（郵件閘道 CRITICAL→IMPORTANT、內部 wiki IMPORTANT→NORMAL、檔案伺服器 NORMAL→IMPORTANT、機房環控 PLC IMPORTANT→CRITICAL），優先序分布由 8/22/8 變為 7/23/8。
