@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feature/**"]
+    branches: ["main", "feature/**", "chore/**", "fix/**"]
   pull_request:
 
 jobs:
@@ -28,6 +28,9 @@ jobs:
       - name: Validate Day 2 static fixtures
         run: uv run python scripts/validate_day02.py
 
+      - name: Validate data contracts
+        run: uv run python scripts/validate_schemas.py
+
       - name: Smoke run decision engine on day-06 sample
         run: >
           uv run cve2action rank
@@ -35,3 +38,31 @@ jobs:
           --context data/synthetic/day-06-asset-context.csv
           --rules config/risk_rules.yaml
           --out ranked_result.csv
+
+      # 以下兩步守住「文件寫的完整流程真的跑得起來」，與開發規格 §7 的指令逐字對應。
+      - name: Derive asset context from facts (Northstar)
+        run: >
+          uv run cve2action derive-context
+          --assets data/synthetic/northstar/assets.csv
+          --controls data/synthetic/northstar/controls.csv
+          --business data/synthetic/northstar/business_context.csv
+          --rules config/risk_rules.yaml --as-of 2026-09-24
+          --out data/synthetic/northstar/asset_context.csv
+
+      - name: Full-chain run with snapshots, threat intel and controls (Northstar)
+        run: >
+          uv run cve2action rank
+          --scanner data/synthetic/northstar/scanner.csv
+          --context data/synthetic/northstar/asset_context.csv
+          --rules config/risk_rules.yaml
+          --snapshots data/snapshots/nvd
+          --epss data/snapshots/epss
+          --kev data/snapshots/kev
+          --controls data/synthetic/northstar/controls.csv
+          --as-of 2026-09-24
+          --out ranked_result.csv
+
+      # 推導與評分都離線，重跑必須得到與版控完全相同的結果；
+      # 有任何差異就代表快照、規則或推導邏輯動了而沒有一起更新資料集。
+      - name: Committed dataset must be reproducible
+        run: git diff --exit-code -- data/synthetic/northstar/
