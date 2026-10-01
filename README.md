@@ -20,7 +20,7 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv --context dat
 
 ## 文件入口
 
-- [30 天總體施工藍圖](docs/CVE2Action-30天總體施工藍圖.md)
+- [30 天總體施工藍圖](CVE2Action-30天總體施工藍圖.md)
 - [Decision Engine v0.1 開發規格](docs/architecture/decision-engine-v0.1-spec.md)
 - [架構決策 ADR-0001：專案定位](docs/decisions/ADR-0001-專案定位.md)
 - [架構決策 ADR-0003：條件式行動決策](docs/decisions/ADR-0003-條件式行動決策.md)
