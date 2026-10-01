@@ -1,5 +1,7 @@
 # Day 4｜為消失的「我們」畫像
 
+![cover](../images/day04-fig1-cover.png)
+
 昨天，我們留下了三把尺：
 
 > **嚴重度看漏洞。**  
@@ -47,9 +49,10 @@ Severity 可以從 CVSS 取得；Threat 可以透過 EPSS、CISA KEV 等外部�
 
 > **把漏洞放回它真正存在的企業環境裡，替 Decision Engine 畫出一張「我們」的像。**
 
-![弱掃看見的與它看不見的](../images/day-04-visible-vs-context.png)
+![弱掃看見的與它看不見的](../images/day04-infographic.png)
 
 **圖說：弱掃完成了漏洞發現；但從 Vulnerability 走到 Risk，中間還少了企業自己的 Context。**
+（這張長圖把今天整篇整理成八格，後面兩節的重點也在裡面。）
 
 ---
 
@@ -124,9 +127,7 @@ Impact 更是無底洞：CIA / RTO / RPO / Data Classification / Transaction Vol
 
 每一個都有用，每一個都有理由接。再想十分鐘，還可以多二十個。
 
-![企業 Context 的無底洞](../images/day-04-context-rabbit-hole.png)
-
-**圖說：如果「有助於判斷」就是納入條件，我們最後做出來的不會是 Decision Engine，而是另一個企業整合專案。**
+> **如果「有助於判斷」就是納入條件，我們最後做出來的不會是 Decision Engine，而是另一個企業整合專案。**
 
 這裡才是今天真正的工程問題：
 
@@ -152,9 +153,7 @@ Decision Engine 也是。第一版不需要完整理解企業，只需要掌握*
 
 不是因為它們不重要，而是第一版沒有它們，**仍然可以回答比 CVSS 更多的問題。**
 
-![CVE2Action v0.1 第一張企業畫像](../images/day-04-v01-portrait.png)
-
-**圖說：我們終於讓 Decision Engine 看見弱掃報告裡原本缺席的「我們」。但看得見，不代表它已經會決定。**
+> **我們終於讓 Decision Engine 看見弱掃報告裡原本缺席的「我們」。但看得見，不代表它已經會決定。**
 
 ---
 

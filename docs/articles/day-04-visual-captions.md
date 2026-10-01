@@ -1,7 +1,17 @@
-# Day 4｜配圖與閱讀節奏
+# Day 4｜配圖與閱讀節奏（規劃稿）
 
-三張圖各負責一次認知轉折：缺口、Scope 壓力、MVP 雛形。圖片不是裝飾，而是文章推論的一部分。
+> **狀態：這是出圖前的規劃，最後沒有照這個方案做。**
+> 實際產出是一張八格長圖 `day04-infographic.png`，把下面三個轉折併進第 5、6、7 格，
+> 另加封面 `day04-fig1-cover.png`。文章已於 2026-10-01 對齊實際檔案；
+> 此檔保留當時的構想，不回頭改寫成結果。
 
-1. `day-04-visible-vs-context.png`：弱掃可見資訊與企業 Context 的缺口。
-2. `day-04-context-rabbit-hole.png`：企業 Context 若無邊界會膨脹成整合專案。
-3. `day-04-v01-portrait.png`：CVE2Action v0.1 的最小輸入；Decision 的 `?` 必須保留給 Day 5。
+原規劃：三張圖各負責一次認知轉折——缺口、Scope 壓力、MVP 雛形。圖片不是裝飾，而是文章推論的一部分。
+
+| # | 原規劃檔名 | 負責的轉折 | 實際落點 |
+|---|---|---|---|
+| 1 | `day-04-visible-vs-context.png` | 弱掃可見資訊與企業 Context 的缺口 | 長圖第 5 格 |
+| 2 | `day-04-context-rabbit-hole.png` | 企業 Context 若無邊界會膨脹成整合專案 | 長圖第 6 格 |
+| 3 | `day-04-v01-portrait.png` | CVE2Action v0.1 的最小輸入；Decision 的 `?` 必須保留給 Day 5 | 長圖第 7 格 |
+
+Day 5 之後改為每日固定三張獨立圖（封面＋兩張論點圖），並以 `day-NN-<slug>.png` 命名，
+不再出現單張長圖與規劃稿不一致的情況。
