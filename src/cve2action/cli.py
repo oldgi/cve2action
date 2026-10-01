@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from .collectors.nvd import (
 from .engine import rank
 from .io import InputError, read_asset_context, read_scanner, write_ranked_result
 from .models import DECISION_NEEDS_CONTEXT
+from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
 from .rules import RulesError, load_rules
 
@@ -97,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     derive_parser.add_argument("--assets", required=True, help="資產清冊 CSV")
     derive_parser.add_argument("--controls", required=True, help="控制措施 CSV")
+    derive_parser.add_argument(
+        "--business", required=True,
+        help="業務脈絡 CSV（data_class / rto_hours / customer_facing）；criticality 由此推導",
+    )
     derive_parser.add_argument("--rules", required=True, help="Decision Rule 設定 YAML")
     derive_parser.add_argument("--out", required=True, help="輸出 asset_context.csv 路徑")
     derive_parser.add_argument(
@@ -115,14 +121,16 @@ def _run_derive_context(args) -> int:
     try:
         rules = load_rules(args.rules)
         as_of = date.fromisoformat(args.as_of)
+        business = derive_business_context(_read_rows(args.business), rules.business_impact)
         rows = derive_asset_context(_read_rows(args.assets), _read_rows(args.controls),
-                                    rules, as_of)
-    except (RulesError, ExposureError, ValueError, FileNotFoundError) as error:
+                                    rules, as_of, business=business)
+    except (RulesError, ExposureError, ValueError, KeyError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 
     header = ["asset", "environment", "reachability", "control_effectiveness",
-              "business_criticality", "reachability_source", "control_source"]
+              "business_criticality", "reachability_source", "control_source",
+              "business_source"]
     with open(args.out, "w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, lineterminator='\n')
         writer.writerow(header)
@@ -134,6 +142,9 @@ def _run_derive_context(args) -> int:
     print(f"reachability: {len(rows) - observed} from zone, {observed} observed; "
           f"control evidence expired on {expired} asset(s) "
           f"(max age {rules.control_evidence_max_age_days}d)")
+    criticality = Counter(r["business_criticality"] for r in rows)
+    print("business criticality: "
+          + ", ".join(f"{v} {k}" for k, v in sorted(criticality.items())))
     return 0
 
 

@@ -206,10 +206,8 @@ def test_context_is_derived_not_hand_written():
     from cve2action.normalization.exposure import derive_asset_context
 
     business = derive_business_context(read("business_context.csv"), RULES.business_impact)
-    assets = [dict(a, criticality=business[a["asset_id"]].value) for a in read("assets.csv")]
-    derived = derive_asset_context(assets, read("controls.csv"), RULES, date(2026, 9, 24))
-    for row in derived:
-        row["business_source"] = business[row["asset"]].source
+    derived = derive_asset_context(read("assets.csv"), read("controls.csv"), RULES,
+                                   date(2026, 9, 24), business=business)
     assert derived == read("asset_context.csv")
     committed = read("asset_context.csv")
 
