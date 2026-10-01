@@ -1,0 +1,27 @@
+file: business_context.csv
+version: "1.0.0"
+produced_by: 業務單位提供的可查證事實
+consumed_by: cve2action derive-context（normalization.business.derive_business_context）
+description: criticality 的三項輸入事實。多維度取最嚴重者，不平均。
+columns:
+  - name: asset_id
+    required: true
+    blank_ok: false
+  - name: data_class
+    required: true
+    blank_ok: false
+    domain: [RESTRICTED, CONFIDENTIAL, INTERNAL, PUBLIC, NONE]
+    note: NONE 代表不存業務資料，不是未知。
+  - name: rto_hours
+    required: true
+    blank_ok: false
+    range: [0.0, 8760.0]
+    note: 多久之內非復原不可。缺值會讓該資產推導失敗並中止，不預設。
+  - name: customer_facing
+    required: true
+    blank_ok: false
+    domain: ["yes", "no"]
+    note: 直接面對客戶者至少 IMPORTANT。
+  - name: notes
+    required: false
+    blank_ok: true

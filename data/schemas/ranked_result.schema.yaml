@@ -1,0 +1,72 @@
+file: ranked_result.csv
+version: "1.2.0"
+produced_by: cve2action rank（io.write_ranked_result）
+consumed_by: 人、Day 16 的 Explain API、Day 28 的 Dashboard
+description: >
+  排序後的處置優先清單。SCORED 依 priority_score 降冪在前，NEEDS_CONTEXT 全部列在最後且不隱藏。
+  欄位順序固定，由 models.OUTPUT_COLUMNS 定義。
+columns:
+  - name: asset
+    required: true
+    blank_ok: false
+  - name: cve
+    required: true
+    blank_ok: false
+  - name: cvss
+    required: true
+    blank_ok: true
+    note: NEEDS_CONTEXT 列可能空白。
+  - name: cvss_version
+    required: true
+    blank_ok: true
+    domain: ["3.1", "4.0", ""]
+    note: 兩版不做換算，實際採用哪一版一律標明。
+  - name: cvss_source
+    required: true
+    blank_ok: true
+    note: 例 nvd/primary、nvd/secondary、scanner。
+  - name: threat
+    required: true
+    blank_ok: true
+    range: [0.0, 1.0]
+    note: 空白代表完全沒有威脅資料，該項權重退回 severity——不是 0。
+  - name: threat_source
+    required: true
+    blank_ok: true
+    note: 勝出來源，並以 (over ...) 記下落敗的一方。
+  - name: environment
+    required: true
+    blank_ok: true
+  - name: control_effectiveness
+    required: true
+    blank_ok: true
+    domain: [NONE, PARTIAL, STRONG, UNKNOWN, ""]
+  - name: control_source
+    required: true
+    blank_ok: true
+    note: 不適用與未知都不折減，但這裡寫的不是同一句話。
+  - name: effective_exposure
+    required: true
+    blank_ok: true
+    range: [0.0, 1.0]
+  - name: business_criticality
+    required: true
+    blank_ok: true
+    domain: [CRITICAL, IMPORTANT, NORMAL, ""]
+  - name: priority_score
+    required: true
+    blank_ok: true
+    range: [0.0, 10.0]
+    note: 僅用於排序與驗證，不宣稱事故機率或財務損失。
+  - name: priority
+    required: true
+    blank_ok: true
+    domain: [Critical, High, Medium, Low, ""]
+  - name: decision
+    required: true
+    blank_ok: false
+    domain: [SCORED, NEEDS_CONTEXT]
+  - name: reason
+    required: true
+    blank_ok: false
+    note: 每列必附，四個因子的輸入、數值與代入結果。

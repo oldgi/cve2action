@@ -1,0 +1,26 @@
+file: controls.csv
+version: "1.0.0"
+produced_by: 控制措施清冊
+consumed_by: cve2action derive-context 與 rank --controls（normalization.exposure、normalization.control）
+description: 一列一項控制。一台資產可以有多項，取效果最強者，不相乘。
+columns:
+  - name: asset_id
+    required: true
+    blank_ok: false
+  - name: control_type
+    required: true
+    blank_ok: false
+    note: 必須在 risk_rules.yaml 的 controls.applicability 裡宣告適用範圍；未宣告者視為無法判斷，不折減。
+  - name: effectiveness
+    required: true
+    blank_ok: false
+    domain: [NONE, PARTIAL, STRONG, UNKNOWN]
+    note: 綁定證據門檻（見開發規格 §3.1）。UNKNOWN 係數必須 >= NONE。
+  - name: evidence
+    required: true
+    blank_ok: false
+    note: 這個等級憑什麼成立的一句話。空白等於拿不出證據，應改填 UNKNOWN。
+  - name: verified_at
+    required: true
+    blank_ok: false
+    note: ISO 日期。超過 exposure.control_evidence_max_age_days 即降為 UNKNOWN——過期不代表失效，但不能再拿它打折。
