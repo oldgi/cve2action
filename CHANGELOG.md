@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 `LICENSE`（MIT），對齊 `pyproject.toml` 既有的授權宣告。
 - 新增 `normalization/control.py`：控制措施的**適用性先於強度**。一項控制要參與折減，得先證明攔截點落在這條攻擊路徑上，判斷只讀 CVSS 向量既有的 AV（攻擊從哪來）與 PR（路徑上有沒有驗證這一關），不新增人工欄位。結果採三態：APPLICABLE（套用強度）、NOT_APPLICABLE（已知攔不到，是事實）、UNDECIDABLE（讀不到向量，是未知）；後兩者都不折減但 `control_source` 記錄不同理由。適用範圍外部化於 `controls.applicability`，新增 `rank --controls/--as-of` 與 31 個測試，ADR-day-15 記錄規則。
 - 新增 `normalization/threat.py`：Threat 由 EPSS 與 KEV 推導——EPSS 先做對數轉換（`ln(1+99p)/ln(1+99)`）把偏斜的低端拉開，再與 KEV（收錄＝1.0）**取最大值**而非平均，因為兩者回答的不是同一個問題（EPSS 預測未來三十天的廣度，KEV 記錄過去已確認的事實）；`threat_source` 記錄勝出來源與落敗的一方（例 `kev:LISTED (over epss:0.0171)`）。完全沒有威脅資料時不補零，威脅項整個移除。ADR-day-14 記錄規則。
 - 新增 `normalization/business.py` 與 `business_context.csv`：Business Criticality 改由三項可查證事實推導（`data_class`、`rto_hours`、`customer_facing`），多維度取最嚴重者而非平均，缺事實則報錯；輸出新增 `business_source` 說明哪個維度勝出。ADR-day-13 記錄規則。
@@ -33,8 +34,15 @@
 - 新增 Day 2 資產與弱點發現模擬資料。
 - 新增 Day 2 的 16:9 情境式修補優先序主視覺，保存高畫質 PNG 與文章上傳用 JPEG。
 
+### Fixed
+
+- `cve2action derive-context` 自 Day 13 起產出的 `business_criticality` 整欄為空：Day 13 把 criticality 移出 `assets.csv`（更名 `declared_criticality`）改由 `business_context.csv` 推導，但 `derive_asset_context` 仍讀舊欄位，CLI 也沒有對應輸入。照文件流程產出的 context 接回 `rank` 會整批變成 NEEDS_CONTEXT。當時測試只覆蓋函式層且自行補上 criticality，因此未被發現。現已新增三個走 CLI 的測試，其中一個斷言輸出與版控中的 `asset_context.csv` 逐位元組相同。
+
 ### Changed
 
+- **破壞性變更**：`cve2action derive-context` 新增必填參數 `--business`（業務脈絡 CSV），輸出新增 `business_source` 欄；某資產缺業務事實時以 exit code 2 中止，不再靜默產出空值。
+- 施工藍圖收斂為根目錄一份：`docs/` 底下那份停留在 Day 5 之前，Day 6 起日程整個錯開一天，而 README 的文件入口正指向它。其獨有的第 20 節（Day 2 設計修訂，含 Day 10/18/24/30 補充驗收）先併入現行版後才刪除。
+- 《Decision Engine 開發規格》由凍結在 Day 6 的狀態更新為追蹤現況：四項公式、16 欄輸出、缺資料退化行為表、`derive-context` 流程、對照 ADR 的變更歷程，以及先前未寫在任何地方的完整流程重現指令。
 - Control Effectiveness 由資產層改為逐筆推導：Northstar 38 筆評分中 9 筆維持折減、5 筆撤銷（3 筆網段隔離對 `AV:L`、2 筆驗證類控制對 `PR:N`），分布由 8/25/5 變 9/24/5；Zerologon 由 8.10 High 回到 9.00 Critical，同一台 AD DC 上的 PrintNightmare 仍保有折減（7.68 High）。`derive-context` 產出的資產層視圖維持 Day 12 行為不變。
 - 折減上限 0.4 綁定一條可測性質並加上回歸測試：單一控制最多讓一筆 finding 往下移一個分級（最大折減 1.5 分 < 跨兩級所需的 2.01 分）。`control_effectiveness` 四級改以證據門檻定義，不再只是三個數字。
 - `ranked_result.csv` 新增 `control_effectiveness` 與 `control_source` 兩欄。
