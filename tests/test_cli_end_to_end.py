@@ -115,3 +115,64 @@ def test_day08_preferring_v40_moves_router_into_high(tmp_path):
     assert order.index("NS-EDGE-RTR-01") < order.index("NS-MAIL-GW-01")
     # 其餘只有 v3.1 的列不受偏好順序影響
     assert next(r for r in rows if r["asset"] == "NS-MAIL-GW-02")["priority_score"] == "9.0"
+
+
+# --- derive-context 走 CLI 這條路（Day 13 之後曾經只在函式層被覆蓋） -------------
+
+NORTHSTAR = REPO_ROOT / "data/synthetic/northstar"
+
+
+def run_derive_context(tmp_path: Path, extra: list[str] | None = None) -> int:
+    return main([
+        "derive-context",
+        "--assets", str(NORTHSTAR / "assets.csv"),
+        "--controls", str(NORTHSTAR / "controls.csv"),
+        "--business", str(NORTHSTAR / "business_context.csv"),
+        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--as-of", "2026-09-24",
+        "--out", str(tmp_path / "asset_context.csv"),
+    ] + (extra or []))
+
+
+def test_derive_context_cli_reproduces_the_committed_file(tmp_path):
+    """CLI 產出必須與版控裡的 asset_context.csv 完全相同——否則文件寫的流程是壞的。"""
+    assert run_derive_context(tmp_path) == 0
+    produced = (tmp_path / "asset_context.csv").read_text(encoding="utf-8")
+    committed = (NORTHSTAR / "asset_context.csv").read_text(encoding="utf-8")
+    assert produced == committed
+
+
+def test_derive_context_output_feeds_rank_without_needs_context(tmp_path):
+    """接回 rank 要能評分；criticality 掉了的話這裡會整批變 NEEDS_CONTEXT。"""
+    assert run_derive_context(tmp_path) == 0
+    out = tmp_path / "ranked.csv"
+    assert main([
+        "rank",
+        "--scanner", str(NORTHSTAR / "scanner.csv"),
+        "--context", str(tmp_path / "asset_context.csv"),
+        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--snapshots", str(REPO_ROOT / "data/snapshots/nvd"),
+        "--out", str(out),
+    ]) == 0
+    with out.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    gaps = [r for r in rows if r["decision"] == "NEEDS_CONTEXT"]
+    assert len(gaps) == 2, [r["reason"] for r in gaps]
+    assert all(r["business_criticality"] for r in rows if r["decision"] == "SCORED")
+
+
+def test_derive_context_fails_loudly_when_business_rows_are_missing(tmp_path):
+    """缺業務事實要報錯退出，不是靜靜產出一欄空白。"""
+    thin = tmp_path / "business.csv"
+    lines = (NORTHSTAR / "business_context.csv").read_text(encoding="utf-8").splitlines()
+    thin.write_text("\n".join(lines[:3]) + "\n", encoding="utf-8")
+    code = main([
+        "derive-context",
+        "--assets", str(NORTHSTAR / "assets.csv"),
+        "--controls", str(NORTHSTAR / "controls.csv"),
+        "--business", str(thin),
+        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--as-of", "2026-09-24",
+        "--out", str(tmp_path / "out.csv"),
+    ])
+    assert code == 2

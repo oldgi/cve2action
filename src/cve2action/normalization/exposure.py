@@ -131,15 +131,22 @@ def _applicability(kind: str, attack: Attack | None, rules,
 
 
 def derive_asset_context(assets: list[dict], controls: list[dict], rules, as_of: date,
-                         observed: dict[str, str] | None = None) -> list[dict]:
-    """把 assets + controls 推導成引擎吃的 asset_context，並保留每個值的來源。"""
+                         observed: dict[str, str] | None = None,
+                         business: dict[str, Derived] | None = None) -> list[dict]:
+    """把 assets + controls 推導成引擎吃的 asset_context，並保留每個值的來源。
+
+    `business` 是 Day 13 由 `business_context.csv` 推導出來的 criticality（附來源）。
+    Day 13 之後 `assets.csv` 的欄位改名為 declared_criticality 且僅供對照，所以沒有給
+    `business` 時這一欄只能留白——留白會讓該資產在評分時變成 NEEDS_CONTEXT，
+    這是正確的失敗方式：缺業務事實就不評分，不拿宣告值頂替。
+    """
     observed = observed or {}
     rows = []
     for asset in assets:
         asset_id = asset["asset_id"]
         reach = derive_reachability(asset, rules, observed.get(asset_id))
         control = derive_control_effectiveness(asset_id, controls, rules, as_of)
-        rows.append({
+        row = {
             "asset": asset_id,
             "environment": asset.get("environment", ""),
             "reachability": reach.value,
@@ -147,5 +154,12 @@ def derive_asset_context(assets: list[dict], controls: list[dict], rules, as_of:
             "business_criticality": asset.get("criticality", ""),
             "reachability_source": reach.source,
             "control_source": control.source,
-        })
+        }
+        if business is not None:
+            derived = business.get(asset_id)
+            if derived is None:
+                raise ExposureError(f"{asset_id}: no business context row to derive criticality")
+            row["business_criticality"] = derived.value
+            row["business_source"] = derived.source
+        rows.append(row)
     return rows
