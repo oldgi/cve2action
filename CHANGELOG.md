@@ -21,6 +21,7 @@
 
 ### Fixed
 
+- `docs/articles/day-04.md` 引用三張從未產出的圖（`day-04-visible-vs-context`／`-context-rabbit-hole`／`-v01-portrait`）：Day 4 最後改用一張八格長圖 `day04-infographic.png`，文章沒跟著改，repo 版本破圖至今（已發表版不受影響）。現改為引用長圖，並補上一直存在卻沒被引用的封面 `day04-fig1-cover.png`；另外兩處的圖說保留原文、改為引言樣式。`day-04-visual-captions.md` 標註為規劃稿並記錄實際落點。
 - `cve2action derive-context` 自 Day 13 起產出的 `business_criticality` 整欄為空：Day 13 把 criticality 移出 `assets.csv`（更名 `declared_criticality`）改由 `business_context.csv` 推導，但 `derive_asset_context` 仍讀舊欄位，CLI 也沒有對應輸入。照文件流程產出的 context 接回 `rank` 會整批變成 NEEDS_CONTEXT。當時測試只覆蓋函式層且自行補上 criticality，因此未被發現。現已新增三個走 CLI 的測試，其中一個斷言輸出與版控中的 `asset_context.csv` 逐位元組相同。
 
 ### Changed
