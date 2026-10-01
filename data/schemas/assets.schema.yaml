@@ -1,0 +1,38 @@
+file: assets.csv
+version: "1.1.0"
+produced_by: 資產清冊（Northstar 由 scripts/build_northstar.py 產生）
+consumed_by: cve2action derive-context（normalization.exposure.derive_reachability）
+description: 資產事實。Day 13 起 criticality 不再由這裡提供。
+columns:
+  - name: asset_id
+    required: true
+    blank_ok: false
+  - name: hostname
+    required: true
+    blank_ok: false
+  - name: zone
+    required: true
+    blank_ok: false
+    domain: [DMZ, APP, DATA, CORP, MGMT, OT, LAB]
+    note: 行政標籤，不是觀測到的可達性。對應表在 risk_rules.yaml 的 exposure.zone_reachability，有觀測值時以觀測為準。
+  - name: environment
+    required: true
+    blank_ok: false
+    domain: [PROD, NON_PROD]
+    note: 僅用於定位與解釋，不進公式。
+  - name: business_role
+    required: true
+    blank_ok: false
+  - name: declared_criticality
+    required: true
+    blank_ok: false
+    domain: [CRITICAL, IMPORTANT, NORMAL]
+    note: Day 13 由 criticality 更名。僅供與推導值對照，不進公式——改名就是為了讓誤用變得顯眼。
+  - name: crown_jewel
+    required: true
+    blank_ok: false
+    domain: ["yes", "no"]
+    note: Day 19 之後的攻擊路徑終點；目前不進公式。
+  - name: owner_team
+    required: true
+    blank_ok: false

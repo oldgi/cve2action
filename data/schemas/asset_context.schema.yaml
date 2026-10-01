@@ -1,0 +1,41 @@
+file: asset_context.csv
+version: "1.2.0"
+produced_by: cve2action derive-context（Day 12 起不應手寫）
+consumed_by: cve2action rank（io.read_asset_context）
+description: 引擎吃的 Minimum Context。每個推導值都帶一個 source 欄位說明它從哪來。
+columns:
+  - name: asset
+    required: true
+    blank_ok: false
+    note: 必須唯一，重複即拒載。
+  - name: environment
+    required: true
+    blank_ok: true
+    domain: [PROD, NON_PROD, ""]
+    note: 僅用於定位與解釋，不進公式。
+  - name: reachability
+    required: true
+    blank_ok: false
+    domain: [INTERNET, INTERNAL, ISOLATED]
+  - name: control_effectiveness
+    required: true
+    blank_ok: false
+    domain: [NONE, PARTIAL, STRONG, UNKNOWN]
+    note: UNKNOWN 是合法值不是缺值，以最保守係數 1.0 計分。
+  - name: business_criticality
+    required: true
+    blank_ok: false
+    domain: [CRITICAL, IMPORTANT, NORMAL]
+    note: Day 13 起由 business_context.csv 推導；空白會讓該資產所有 finding 變成 NEEDS_CONTEXT。
+  - name: reachability_source
+    required: true
+    blank_ok: false
+    note: 例 zone:DMZ 或 observed。觀測優先於推導。
+  - name: control_source
+    required: true
+    blank_ok: false
+    note: 例 control:waf@2026-08-14、no-control，或帶 (expired 120d)／(not applicable to AV:LOCAL) 的理由。
+  - name: business_source
+    required: true
+    blank_ok: false
+    note: 例 data:RESTRICTED、rto:4h、customer-facing——說明哪個維度勝出。

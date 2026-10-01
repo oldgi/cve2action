@@ -1,0 +1,23 @@
+file: scanner.csv
+version: "1.0.0"
+produced_by: 弱掃工具匯出（Northstar 由 scripts/build_northstar.py 產生）
+consumed_by: cve2action rank（io.read_scanner）
+description: 一列一筆 finding。v0.1 假設已完成資產歸併，同一台機器的多個 IP 不再分列。
+columns:
+  - name: asset
+    required: true
+    blank_ok: false
+    note: 以字串精確比對 asset_context.csv 的 asset；比對不到即 NEEDS_CONTEXT，不猜。
+  - name: cve
+    required: true
+    blank_ok: false
+    note: v0.1 不驗證格式。有 NVD 快照時以快照分數為準，與此處的 cvss 不一致會記在 reason。
+  - name: cvss
+    required: true
+    blank_ok: true
+    range: [0.0, 10.0]
+    note: 掃描器手填值。允許空白——NVD 未評分時本來就沒有值；空白不等於 0。
+  - name: service
+    required: false
+    blank_ok: true
+    note: 僅用於定位與解釋，不進公式。
