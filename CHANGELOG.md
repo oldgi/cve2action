@@ -6,6 +6,7 @@
 
 ### Added
 
+- 新增 `src/cve2action/scoring/` 套件與 `scoring/explain.py`：`Explanation` 成為計分的第一級產物，`ranked_result.csv` 的列、`reason` 欄、JSON 與人讀說明全是它的投影——與快照 `raw`／`extracted` 同一條紀律，字串不可能再與數字不一致。每個 `Factor` 帶值、權重、貢獻、佔比、原始輸入與來源；`gap_to()` 把兩筆的分差拆成逐項貢獻差，加總等於總分差。新增 CLI `cve2action explain`（`--cve`／`--asset`／`--top`／`--json`，自動附上與前一名的差距）與 15 個測試，其中一個會把每一列 `reason` 裡的數字全部抓出來逐一驗證它存在於 Explanation 中。ADR-day-16 記錄規則。
 - 新增 `data/schemas/`：六份 CSV 的資料契約（欄位、值域、缺值語意、誰寫誰讀），以 `scripts/validate_schemas.py` 強制驗證並納入 CI。附四個反向測試證明契約抓得到違規——欄位值超出值域、該填未填、多出未宣告欄位、少掉必要欄位。
 - CI 新增三個步驟守住「文件寫的完整流程真的跑得起來」：Northstar 的 `derive-context`、含快照與威脅情報與控制的全鏈 `rank`，以及 `git diff --exit-code` 確認離線重跑與版控結果完全相同。
 - 新增 `LICENSE`（MIT），對齊 `pyproject.toml` 既有的授權宣告。
@@ -26,6 +27,7 @@
 
 ### Changed
 
+- `engine.py` 移入 `scoring/`（藍圖 §12），與 `explain.py` 同層；`models.py`、`rules.py`、`io.py` 留在套件根目錄，因為攻擊路徑與修補建議也要用。舊路徑 `from cve2action.engine import rank` 保留相容層。排序只實作在 `rank_explained()` 一次，`rank()` 是它的列投影，兩者不可能排出不同順序。輸出內容完全不變。
 - **破壞性變更**：`cve2action derive-context` 新增必填參數 `--business`（業務脈絡 CSV），輸出新增 `business_source` 欄；某資產缺業務事實時以 exit code 2 中止，不再靜默產出空值。
 - 施工藍圖收斂為根目錄一份：`docs/` 底下那份停留在 Day 5 之前，Day 6 起日程整個錯開一天，而 README 的文件入口正指向它。其獨有的第 20 節（Day 2 設計修訂，含 Day 10/18/24/30 補充驗收）先併入現行版後才刪除。
 - 《Decision Engine 開發規格》由凍結在 Day 6 的狀態更新為追蹤現況：四項公式、16 欄輸出、缺資料退化行為表、`derive-context` 流程、對照 ADR 的變更歷程，以及先前未寫在任何地方的完整流程重現指令。
