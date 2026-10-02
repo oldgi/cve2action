@@ -2,7 +2,7 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 規格版本 | 0.3.1（`config/risk_rules.yaml` 仍為 `0.3.0`——Day 16 沒有動規則，只動了結構） |
+| 規格版本 | 0.3.2（`config/risk_rules.yaml` 為 `0.3.0`、`config/acceptance.yaml` 為 `0.1.0`） |
 | 狀態 | Live——隨 ADR 更新；每次改動都要在 §8 留下一行 |
 | 依據 | [Day 5 文章](../articles/day-05.md)、[ADR-day-05](../decisions/ADR-day-05-decision-engine-v01.md) 起的 ADR 鏈（見 §8） |
 | 實作 | `src/cve2action/`：`rules.py`、`io.py`、`models.py`、`cli.py`、`collectors/`、`normalization/`、`scoring/` |
@@ -211,7 +211,9 @@ uv run cve2action explain --cve CVE-2020-1472   --scanner ... --context ... --ru
 兩筆 NEEDS_CONTEXT 固定為 `NS-SHADOW-NAS-02`（清冊外的機器）與
 `NS-MAIL-GW-01 / CVE-2011-3389`（NVD 無 v3.1，掃描器也沒給值）。
 
-**Low 恆為 0 是已知缺口**，留給 Day 18 校準。
+**Low 恆為 0 不是公式缺陷**（Day 18 更正）：合成探針顯示四個分級都構造得出來，
+例如 `CVSS 5.5 / ISOLATED / STRONG / NORMAL → 3.95 Low`。Northstar 沒有 Low，
+是因為它沒有「低嚴重度 × 隔離 × 不重要」的組合。詳見 [ADR-day-18](../decisions/ADR-day-18-scoring-acceptance.md)。
 
 ## 7. 完整流程重現
 
@@ -255,6 +257,24 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv \
 | 0.2.0 | 14 | 加入第四項 `T`，權重改 0.35/0.15/0.25/0.25；無資料時退回 severity | [ADR-day-14](../decisions/ADR-day-14-threat-enrichment.md) |
 | 0.3.0 | 15 | 控制適用性先於強度；輸出加 `control_effectiveness` / `control_source` | [ADR-day-15](../decisions/ADR-day-15-control-calibration.md) |
 | 0.3.1 | 16 | Explanation 成為計分的第一級產物，列與理由改為其投影；`engine` 移入 `scoring/` | [ADR-day-16](../decisions/ADR-day-16-explain-api.md) |
+| 0.3.2 | 17–18 | 校準基準與分歧解釋；八條評分門檻與豁免機制，v0.1 baseline 凍結 | [ADR-day-17](../decisions/ADR-day-17-calibration-test.md)、[ADR-day-18](../decisions/ADR-day-18-scoring-acceptance.md) |
+
+## 8.1 v0.1 評分門檻（Day 18）
+
+「可用」的定義在 [`config/acceptance.yaml`](../../config/acceptance.yaml)，八條，分兩種：
+
+- **structural**（3 條）——公式本身的性質，用合成探針驗證，與資料集無關：
+  四個分級都構造得出來、缺資料不得讓分數變低、任一因子單獨變大分數不得下降。
+- **empirical**（5 條）——在 Northstar 上量：完整可解釋性、分辨力、分級平衡、值域利用、頂端飽和。
+
+結果 6 通過、2 豁免（`band_balance` 0.6316、`range_coverage` 0.44）、0 阻擋。兩條失敗同一個
+根因——值域映射只有三到五檔，輸出不可能比輸入細——都豁免到 Day 20 的可達性引擎之後重新量。
+
+```bash
+uv run cve2action acceptance --scanner ... --context ... --rules ... --criteria config/acceptance.yaml
+```
+
+沒過又沒有 waiver 即 exit 1；CI 每次都跑。`waivers` 缺 `reason` 或 `revisit_on` 會被拒絕載入。
 
 ## 9. 非目標（目前明確不做）
 
