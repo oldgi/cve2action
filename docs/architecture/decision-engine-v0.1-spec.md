@@ -2,10 +2,10 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 規格版本 | 0.3.0（對應 `config/risk_rules.yaml` 的 `version`） |
+| 規格版本 | 0.3.1（`config/risk_rules.yaml` 仍為 `0.3.0`——Day 16 沒有動規則，只動了結構） |
 | 狀態 | Live——隨 ADR 更新；每次改動都要在 §8 留下一行 |
 | 依據 | [Day 5 文章](../articles/day-05.md)、[ADR-day-05](../decisions/ADR-day-05-decision-engine-v01.md) 起的 ADR 鏈（見 §8） |
-| 實作 | `src/cve2action/`：`rules.py`、`engine.py`、`io.py`、`cli.py`、`collectors/`、`normalization/` |
+| 實作 | `src/cve2action/`：`rules.py`、`io.py`、`models.py`、`cli.py`、`collectors/`、`normalization/`、`scoring/` |
 
 > v0.1 的 Vertical Slice 已在 Day 6 跑通，這份文件自此改為**追蹤現況**而非凍結快照。
 > 凍結在 Day 6 當下的那一版見 git 歷史：`git show e9c4fe4:docs/architecture/decision-engine-v0.1-spec.md`。
@@ -161,6 +161,32 @@ priority_score, priority, decision, reason
   勝出、落敗的一方是什麼；控制從哪一項、證據哪一天、適不適用。
 - `reason`：每列必附，把四個因子的輸入、數值與公式代入結果寫成一句話。
 
+## 5.1 Explanation：輸出的來源（Day 16）
+
+`ranked_result.csv` 的列與 `reason` 字串都不是各自拼出來的，而是同一份 `Explanation` 的投影：
+
+```text
+explain_finding() → Explanation ─┬→ row_from()      → CSV 的一列
+                                 ├→ .to_reason()    → reason 欄
+                                 ├→ .to_dict()      → JSON
+                                 └→ explain_row()   → 人讀的多行說明
+```
+
+排序同理只實作一次：`rank_explained()` 排 Explanation，`rank()` 是它的列投影。
+
+`Explanation` 帶四樣東西：代入數值的 `formula`、每一項的 `Factor`（值、權重、貢獻、佔比、
+原始輸入、來源）、`degraded`（威脅項是否缺席）、以及未評分時的 `gaps`。
+
+`Explanation.gap_to(other)` 把兩筆的分差拆成逐項貢獻差，加總等於總分差——這是回答
+「為什麼它排在這裡」的唯一方式，因為那個答案存在於兩列之間，不在任何一列裡面。
+
+```bash
+uv run cve2action explain --cve CVE-2020-1472   --scanner ... --context ... --rules ... --snapshots ... --epss ... --kev ... --controls ...
+```
+
+加 `--json` 輸出機器可讀格式，`--top N` 說明前 N 名，`--asset` 限定資產。
+
+
 ## 6. 驗收案例（回歸基準，tests/ 已覆蓋）
 
 ### 6.1 無威脅資料（Day 5 基準，退化路徑）
@@ -228,10 +254,12 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv \
 | 0.2.0 | 13 | criticality 改由三項業務事實推導，取最嚴重；`declared_criticality` 僅供對照 | [ADR-day-13](../decisions/ADR-day-13-business-impact.md) |
 | 0.2.0 | 14 | 加入第四項 `T`，權重改 0.35/0.15/0.25/0.25；無資料時退回 severity | [ADR-day-14](../decisions/ADR-day-14-threat-enrichment.md) |
 | 0.3.0 | 15 | 控制適用性先於強度；輸出加 `control_effectiveness` / `control_source` | [ADR-day-15](../decisions/ADR-day-15-control-calibration.md) |
+| 0.3.1 | 16 | Explanation 成為計分的第一級產物，列與理由改為其投影；`engine` 移入 `scoring/` | [ADR-day-16](../decisions/ADR-day-16-explain-api.md) |
 
 ## 9. 非目標（目前明確不做）
 
-- Explain API 與結構化理由（Day 16；現在理由只有一個 `reason` 字串）。
+- 反事實（「我改什麼能降幾分」）。`gap_to` 回答的是「和它比差在哪」，
+  不是「改了會變成多少」；後者要有成本模型才有意義，留給 Day 26–27。
 - 評分門檻與人工排序校準（Day 17–18）。
 - 資產歸併（多 IP → 同一 asset）、漏洞適用性閘門（藍圖 §9.0；目前假設 scanner.csv 已是歸併後結果）。
 - 控制與弱點類別的對應（目前 AV/PR 判斷不了協定層，例如 WAF 對 TLS 層的 RC4 降級）。

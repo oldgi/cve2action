@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import sys
 from collections import Counter
 from datetime import date
@@ -23,12 +24,12 @@ from .collectors.nvd import (
     load_snapshots,
     reparse_snapshot,
 )
-from .engine import rank
 from .io import InputError, read_asset_context, read_scanner, write_ranked_result
 from .models import DECISION_NEEDS_CONTEXT
 from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
 from .rules import RulesError, load_rules
+from .scoring import explain_row, rank, rank_explained
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,6 +95,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh", action="store_true", help="忽略既有快照，重新下載目錄"
     )
 
+    explain_parser = subparsers.add_parser(
+        "explain", help="說明某一筆（或整份）的分數怎麼來的，以及為什麼排在這裡"
+    )
+    for name, helptext in (
+        ("--scanner", "弱掃結果 CSV"),
+        ("--context", "資產企業脈絡 CSV"),
+        ("--rules", "Decision Rule 設定 YAML"),
+    ):
+        explain_parser.add_argument(name, required=True, help=helptext)
+    explain_parser.add_argument("--snapshots", help="NVD 快照目錄")
+    explain_parser.add_argument("--epss", help="EPSS 快照目錄")
+    explain_parser.add_argument("--kev", help="KEV 目錄快照所在目錄")
+    explain_parser.add_argument("--controls", help="控制措施 CSV")
+    explain_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
+    explain_parser.add_argument("--cve", help="只說明這個 CVE")
+    explain_parser.add_argument("--asset", help="只說明這個資產")
+    explain_parser.add_argument("--top", type=int, help="只說明前 N 名")
+    explain_parser.add_argument("--json", action="store_true", help="輸出 JSON 而非文字")
+
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
     )
@@ -115,6 +135,57 @@ def build_parser() -> argparse.ArgumentParser:
 def _read_rows(path: str) -> list[dict]:
     with open(path, encoding="utf-8-sig", newline="") as stream:
         return list(csv.DictReader(stream))
+
+
+def _load_scoring_inputs(args):
+    """explain 與 rank 共用的輸入載入；回傳 rank_explained 需要的全部參數。"""
+    rules = load_rules(args.rules)
+    return (
+        read_scanner(args.scanner),
+        read_asset_context(args.context),
+        rules,
+        load_snapshots(args.snapshots) if args.snapshots else {},
+        load_epss_snapshots(args.epss) if args.epss else {},
+        load_catalog(args.kev) if args.kev else None,
+        _read_rows(args.controls) if args.controls else None,
+        date.fromisoformat(args.as_of),
+    )
+
+
+def _run_explain(args) -> int:
+    try:
+        inputs = _load_scoring_inputs(args)
+    except (RulesError, InputError, ValueError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    if args.kev and inputs[5] is None:
+        print(f"error: no KEV catalog under {args.kev}", file=sys.stderr)
+        return 2
+
+    ordered = rank_explained(*inputs)
+    # 先挑出要說明的，再把「它前面那一名」一起帶上——排序的理由只有在比較時才存在
+    wanted = [
+        (position, item) for position, item in enumerate(ordered)
+        if (args.cve is None or item.cve.upper() == args.cve.upper())
+        and (args.asset is None or item.asset.upper() == args.asset.upper())
+    ]
+    if args.top is not None:
+        wanted = wanted[:args.top]
+    if not wanted:
+        print("error: nothing matched --cve/--asset", file=sys.stderr)
+        return 2
+
+    if args.json:
+        payload = [dict(e.to_dict(), rank=p + 1) for p, e in wanted]
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+
+    for position, item in wanted:
+        above = ordered[position - 1] if position > 0 else None
+        print(f"#{position + 1} / {len(ordered)}")
+        print(explain_row(item, above))
+        print()
+    return 0
 
 
 def _run_derive_context(args) -> int:
@@ -268,6 +339,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_fetch_kev(args)
     if args.command == "derive-context":
         return _run_derive_context(args)
+    if args.command == "explain":
+        return _run_explain(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
