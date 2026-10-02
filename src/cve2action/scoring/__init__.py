@@ -4,8 +4,10 @@
 人讀的理由都是同一份 Explanation 的投影，不是各自拼出來的（Day 16）。
 """
 
+from .calibration import Calibration, compare, load_baseline
 from .engine import explain_finding, rank, rank_explained, row_from, score_finding
 from .explain import Explanation, Factor, explain_row
 
 __all__ = ["rank", "rank_explained", "score_finding", "explain_finding", "row_from",
-           "Explanation", "Factor", "explain_row"]
+           "Explanation", "Factor", "explain_row",
+           "Calibration", "compare", "load_baseline"]
