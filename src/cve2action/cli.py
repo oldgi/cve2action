@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from . import __version__
+from .attack_graph import build_graph, build_inventory, resolve
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
 from .collectors.epss import EpssError, get_epss_many
 from .collectors.epss import load_snapshots as load_epss_snapshots
@@ -149,6 +150,21 @@ def build_parser() -> argparse.ArgumentParser:
     acc_parser.add_argument("--controls", help="控制措施 CSV")
     acc_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
 
+    graph_parser = subparsers.add_parser(
+        "graph", help="把資產、服務、網路與帳號資料建成攻擊圖（Day 19）"
+    )
+    for name, helptext in (
+        ("--assets", "資產清冊 CSV"),
+        ("--interfaces", "網路介面 CSV（歸併依據）"),
+        ("--services", "服務清單 CSV"),
+        ("--network", "網路連線 CSV"),
+        ("--identity", "帳號權限關係 CSV"),
+    ):
+        graph_parser.add_argument(name, required=True, help=helptext)
+    graph_parser.add_argument("--out", help="輸出圖的 JSON 路徑；不給就只印統計")
+    graph_parser.add_argument("--resolve", metavar="OBSERVATION",
+                              help="解析單一 IP／hostname／MAC 屬於哪一台資產")
+
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
     )
@@ -257,6 +273,37 @@ def _run_acceptance(args) -> int:
     result = evaluate(criteria, inputs[2], rows, explanations)
     print(acceptance_report(result))
     return 0 if result.accepted else 1
+
+
+def _run_graph(args) -> int:
+    try:
+        assets = _read_rows(args.assets)
+        interfaces = _read_rows(args.interfaces)
+        if args.resolve:
+            print(resolve(args.resolve, build_inventory(interfaces)))
+            return 0
+        graph = build_graph(assets, interfaces, _read_rows(args.services),
+                            _read_rows(args.network), _read_rows(args.identity))
+    except (ValueError, KeyError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    counts = graph.counts()
+    merged = len({i["asset_id"] for i in interfaces})
+    print(f"歸併：{len(interfaces)} 個介面 -> {merged} 台資產")
+    print("節點：" + "、".join(f"{k.split(':')[1]} {v}"
+                             for k, v in counts.items() if k.startswith("node:")))
+    print("邊　：" + "、".join(f"{k.split(':')[1]} {v}"
+                             for k, v in counts.items() if k.startswith("edge:")))
+    print(f"Crown Jewel {len(graph.crown_jewels)} 台")
+    if graph.excluded:
+        print(f"排除 {len(graph.excluded)} 條邊（理由保留，Day 22 要用）：")
+        for item in graph.excluded:
+            print(f"  {item.source} -> {item.target} [{item.kind}] {item.reason}")
+    if args.out:
+        Path(args.out).write_text(graph.to_json(), encoding="utf-8")
+        print(f"-> {args.out}")
+    return 0
 
 
 def _run_derive_context(args) -> int:
@@ -416,6 +463,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_calibrate(args)
     if args.command == "acceptance":
         return _run_acceptance(args)
+    if args.command == "graph":
+        return _run_graph(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)

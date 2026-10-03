@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -21,7 +22,9 @@ from cve2action.normalization.business import derive_business_context  # noqa: E
 from cve2action.normalization.exposure import derive_asset_context  # noqa: E402
 from cve2action.rules import load_rules  # noqa: E402
 
-OUT = ROOT / "data" / "synthetic" / "northstar"
+# 預設寫進版控目錄；測試用 NORTHSTAR_OUT 導到暫存目錄，
+# 才不會在跑測試時改寫其他測試正在讀的檔案。
+OUT = Path(os.environ.get("NORTHSTAR_OUT") or ROOT / "data" / "synthetic" / "northstar")
 
 ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role",
                 "declared_criticality", "crown_jewel", "owner_team"]
