@@ -1,0 +1,33 @@
+file: services.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構服務清單）
+consumed_by: Day 20 可達性引擎（Port 與方向）、Day 22 路徑分析
+description: >
+  有效攻擊面：一列一個「某台機器的某個 port 上有什麼」。
+  網路連得到不代表打得到——沒有服務在聽的 port，那條邊通往空氣。
+columns:
+  - name: asset_id
+    required: true
+    blank_ok: false
+  - name: port
+    required: true
+    blank_ok: false
+    range: [1, 65535]
+  - name: protocol
+    required: true
+    blank_ok: false
+    domain: [tcp, udp]
+  - name: service
+    required: true
+    blank_ok: false
+  - name: version
+    required: true
+    blank_ok: false
+    note: Day 25 的適用性閘門要靠它判斷漏洞適不適用；空白等於無法判斷，不是「沒漏洞」。
+  - name: state
+    required: true
+    blank_ok: false
+    domain: [listening, filtered, closed]
+    note: >
+      只有 listening 構成攻擊面。filtered 代表服務在、但被擋住；
+      closed 代表沒在聽。兩者都不得被當成可達的一步。

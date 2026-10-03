@@ -1,0 +1,36 @@
+file: asset_interfaces.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構網路設定）
+consumed_by: Day 19 多介面資產歸併（§9.0 閘門 1、成功標準 #2 #10）
+description: >
+  一列一個網路介面。弱掃若按 IP 回報，一台有三個介面的機器會被算成三台，
+  同一個漏洞就產生三項修補工作——成功標準 #10 要求「重複觀測只形成一項」。
+  這份資料是歸併的證據，不是歸併的結果；結果是 assets.csv 的 20 個 asset_id。
+notes: >
+  歸併不能只靠 IP：VIP 會被兩台機器同時宣稱。也不能只靠 hostname：
+  同一張網卡可以掛多個名字。資料裡刻意保留了這兩種情況。
+  掃到但不在清冊上的主機（NS-SHADOW-NAS-02）不會出現在這裡——
+  它的缺席就是它被標為 NEEDS_CONTEXT 的原因。
+columns:
+  - name: interface_id
+    required: true
+    blank_ok: false
+  - name: asset_id
+    required: true
+    blank_ok: false
+    note: 必須是 assets.csv 裡的 asset_id——這一欄是歸併後的答案。
+  - name: ip
+    required: true
+    blank_ok: false
+    note: 可能與其他資產重複（VIP）。不得單憑 IP 判定兩筆觀測是同一台。
+  - name: hostname
+    required: true
+    blank_ok: false
+  - name: mac
+    required: true
+    blank_ok: false
+    note: 同一張網卡可以掛多個 IP 與 hostname；MAC 相同是歸併的強證據。
+  - name: interface_type
+    required: true
+    blank_ok: false
+    domain: [service, management, backup, vip]
