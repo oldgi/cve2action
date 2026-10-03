@@ -22,6 +22,17 @@ from .model import (
     Excluded,
     Node,
 )
+from .paths import Path, PathContext, find_paths, render_path, render_summary, shared_hops
+from .reachability import (
+    BY_POLICY,
+    DRIFT,
+    INTRA_ZONE,
+    UNGOVERNED,
+    Basis,
+    annotate,
+    classify,
+    egress_governance,
+)
 from .resolve import AMBIGUOUS, RESOLVED, UNKNOWN, Inventory, build_inventory, resolve
 
 __all__ = [
@@ -29,4 +40,7 @@ __all__ = [
     "NODE_KINDS", "EDGE_KINDS", "INTERNET", "ASSET", "SERVICE", "ACCOUNT",
     "HOSTS", "REACHES", "USES", "GRANTS", "INTERNET_ID",
     "resolve", "build_inventory", "Inventory", "RESOLVED", "AMBIGUOUS", "UNKNOWN",
+    "find_paths", "render_path", "render_summary", "shared_hops", "Path", "PathContext",
+    "classify", "annotate", "egress_governance", "Basis",
+    "BY_POLICY", "INTRA_ZONE", "DRIFT", "UNGOVERNED",
 ]
