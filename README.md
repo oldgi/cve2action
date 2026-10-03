@@ -106,6 +106,8 @@ uv run cve2action rank \
 | 接資料 | [Day 6](docs/articles/day-06.md)・[7](docs/articles/day-07.md)・[8](docs/articles/day-08.md)・[9](docs/articles/day-09.md)・[10](docs/articles/day-10.md) |
 | 做評分 | [Day 11](docs/articles/day-11.md)・[12](docs/articles/day-12.md)・[13](docs/articles/day-13.md)・[14](docs/articles/day-14.md)・[15](docs/articles/day-15.md)・[16](docs/articles/day-16.md)・[17](docs/articles/day-17.md)・[18](docs/articles/day-18.md) |
 
+**番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化，以及加法／幾何平均之外還有哪些形式。
+
 **研究備忘**：[Day 2 案例設計](docs/research/day-02-case-design.md)、[Day 3 概念與邊界](docs/research/day-03-concepts-and-boundaries.md)
 
 ## 專案結構
