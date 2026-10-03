@@ -1,6 +1,7 @@
 """Northstar 模擬資料集：規模、完整性、無真實企業資訊，以及四個必測情境。"""
 
 import csv
+import os
 import subprocess
 import sys
 from collections import Counter
@@ -228,10 +229,15 @@ def test_context_is_derived_not_hand_written():
 
 # --- 可重現 -------------------------------------------------------------------
 
-def test_rebuilding_from_snapshots_is_byte_identical():
-    """資料集由快照重建；重跑不打網路，輸出必須完全一樣。"""
-    before = {p.name: p.read_bytes() for p in sorted(DATA.glob("*.csv"))}
+def test_rebuilding_from_snapshots_is_byte_identical(tmp_path):
+    """資料集由快照重建；重跑不打網路，輸出必須與版控中的完全一樣。
+
+    建到暫存目錄再比對，不改寫版控裡的檔案——這個測試原本會在跑的當下
+    改寫其他測試正在讀的資料，偶發地互相干擾。
+    """
+    environment = dict(os.environ, NORTHSTAR_OUT=str(tmp_path))
     subprocess.run([sys.executable, str(ROOT / "scripts" / "build_northstar.py")],
-                   check=True, capture_output=True, cwd=ROOT)
-    after = {p.name: p.read_bytes() for p in sorted(DATA.glob("*.csv"))}
-    assert before == after
+                   check=True, capture_output=True, cwd=ROOT, env=environment)
+    committed = {p.name: p.read_bytes() for p in sorted(DATA.glob("*.csv"))}
+    rebuilt = {p.name: p.read_bytes() for p in sorted(tmp_path.glob("*.csv"))}
+    assert rebuilt == committed
