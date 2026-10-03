@@ -232,14 +232,17 @@ def explain_finding(
     score = round(10.0 * sum(f.weight * f.value for f in factors), 2)
     fields["effective_exposure"] = exposure
     fields["priority_score"] = score
-    fields["priority"] = rules.band_for(score)
+    band = rules.band_object_for(score)
+    fields["priority"] = band.label
+    fields["priority_tier"] = band.tier
     fields["decision"] = DECISION_SCORED
     fields["control_note"] = control_note
 
     return Explanation(
         asset=str(finding.get("asset", "")), cve=str(finding.get("cve", "")),
         decision=DECISION_SCORED, factors=tuple(factors), score=score,
-        band=fields["priority"], degraded=threat is None, extras=fields,
+        band=fields["priority"], tier=band.tier, action=band.action,
+        degraded=threat is None, extras=fields,
     )
 
 

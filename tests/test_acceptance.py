@@ -196,3 +196,47 @@ def test_cli_acceptance_exits_zero_and_prints_the_verdict(capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert "通過 6/8" in out and "WAIVED" in out
+
+
+# --- Day 18：對外的 P0–P3 層級（ADR-day-18-crps-tier-mapping） ---------------
+
+def test_every_band_maps_to_a_unique_tier_with_an_action():
+    tiers = [(b.label, b.tier, b.action) for b in RULES.priority_bands]
+    assert [t for _l, t, _a in tiers] == ["P0", "P1", "P2", "P3"]
+    assert all(action for _l, _t, action in tiers), "每個層級都要說得出該做什麼"
+    assert len({t for _l, t, _a in tiers}) == 4
+
+
+def test_rules_without_tiers_are_rejected(tmp_path):
+    from cve2action.rules import RulesError
+    from cve2action.rules import load_rules as load
+    text = (ROOT / "config/risk_rules.yaml").read_text(encoding="utf-8")
+    broken = tmp_path / "r.yaml"
+    broken.write_text(text.replace("tier: P0, ", ""), encoding="utf-8")
+    with pytest.raises(RulesError, match="tier"):
+        load(broken)
+
+
+def test_tier_tracks_the_internal_band_exactly():
+    """tier 是 label 的對外名稱，不是另一套判斷——兩者永遠同步。"""
+    expected = {b.label: b.tier for b in RULES.priority_bands}
+    for score in [round(x * 0.1, 1) for x in range(0, 101)]:
+        assert RULES.tier_for(score) == expected[RULES.band_for(score)]
+
+
+def test_blueprint_thresholds_are_deliberately_not_adopted():
+    """藍圖的 80/60/35 是為 CRPS 乘法模型訂的；搬到加法分數上會產生 21 筆 P0。
+
+    這條測試把那個量測結果釘住，免得之後有人「順手對齊藍圖」而不知道代價。
+    """
+    snapshots = ROOT / "data/snapshots"
+    rows = [row_from(e) for e in rank_explained(
+        read_scanner(NORTHSTAR / "scanner.csv"),
+        read_asset_context(NORTHSTAR / "asset_context.csv"),
+        RULES, load_snapshots(snapshots / "nvd"), load_epss(snapshots / "epss"),
+        load_catalog(snapshots / "kev"), _controls(), AS_OF,
+    )]
+    scored = [float(r["priority_score"]) * 10 for r in rows if r["priority_score"] != ""]
+    as_blueprint = sum(1 for x in scored if x >= 80)
+    as_shipped = sum(1 for r in rows if r["priority_tier"] == "P0")
+    assert (as_blueprint, as_shipped) == (21, 9)
