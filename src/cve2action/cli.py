@@ -30,6 +30,7 @@ from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
 from .rules import RulesError, load_rules
 from .scoring import explain_row, rank, rank_explained
+from .scoring.calibration import CalibrationError, compare, load_baseline, report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +115,22 @@ def build_parser() -> argparse.ArgumentParser:
     explain_parser.add_argument("--top", type=int, help="只說明前 N 名")
     explain_parser.add_argument("--json", action="store_true", help="輸出 JSON 而非文字")
 
+    cal_parser = subparsers.add_parser(
+        "calibrate", help="把人工排序基準與模型排序比對，列出每一處分歧"
+    )
+    for name, helptext in (
+        ("--scanner", "弱掃結果 CSV"),
+        ("--context", "資產企業脈絡 CSV"),
+        ("--rules", "Decision Rule 設定 YAML"),
+        ("--baseline", "人工排序基準 YAML"),
+    ):
+        cal_parser.add_argument(name, required=True, help=helptext)
+    cal_parser.add_argument("--snapshots", help="NVD 快照目錄")
+    cal_parser.add_argument("--epss", help="EPSS 快照目錄")
+    cal_parser.add_argument("--kev", help="KEV 目錄快照所在目錄")
+    cal_parser.add_argument("--controls", help="控制措施 CSV")
+    cal_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
+
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
     )
@@ -185,6 +202,27 @@ def _run_explain(args) -> int:
         print(f"#{position + 1} / {len(ordered)}")
         print(explain_row(item, above))
         print()
+    return 0
+
+
+def _run_calibrate(args) -> int:
+    try:
+        baseline = load_baseline(args.baseline)
+        inputs = _load_scoring_inputs(args)
+    except (RulesError, InputError, CalibrationError, ValueError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    try:
+        result = compare(baseline, rank(*inputs))
+    except CalibrationError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    print(report(result))
+    if result.has_unexplained:
+        print("", file=sys.stderr)
+        print(f"FAIL: {len(result.unexplained)} 處分歧沒有書面解釋", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -341,6 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_derive_context(args)
     if args.command == "explain":
         return _run_explain(args)
+    if args.command == "calibrate":
+        return _run_calibrate(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
