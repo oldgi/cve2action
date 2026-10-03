@@ -14,7 +14,7 @@
 | 版本 | `0.2.0`（已發行 `v0.2.0-data`）；`v0.3.0-scoring` 門檻已通過（Day 18） |
 | 進度 | Day 1–16 已發表，17–18 待發；做評分階段（Day 11–18）完成 |
 | Decision Rule | `config/risk_rules.yaml` 版本 `0.3.0` |
-| 規模 | 305 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
+| 規模 | 318 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
 | 最近修訂 | 2026-10-03 |
 
 施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ **做評分（11–18）** → 畫攻擊路徑（19–24）→ 給修補建議（25–30）
@@ -124,6 +124,7 @@ data/schemas/             資料契約（CI 強制驗證）
 data/snapshots/           NVD / EPSS / KEV 的固定快照
 data/synthetic/northstar/ 虛構企業資料集，可由 scripts/build_northstar.py 重建
   資產 20／findings 40／控制 8／Crown Jewel 4／網路連線 25／帳號關係 10／候選措施 15
+  介面 30（併成 20 台）／服務 28／ACL 政策 16
 ```
 
 兩處與藍圖 §12 的命名差異，是刻意保留的既成事實，改名會打斷既有連結：

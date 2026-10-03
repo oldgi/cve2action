@@ -1,0 +1,35 @@
+file: network_policies.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構 ACL）
+consumed_by: Day 20 可達性引擎
+description: >
+  以 zone 為範圍的 ACL／正向列表。它說的是「應該允許什麼」，
+  network_edges.csv 說的是「實際觀測到什麼」。
+notes: >
+  兩者不一致時**以觀測為準**，但差異必須被指出來：政策說不行卻連得通，
+  那是設定漂移，不是把觀測刪掉了事。這條規則在 Day 20 實作。
+columns:
+  - name: policy_id
+    required: true
+    blank_ok: false
+  - name: source_scope
+    required: true
+    blank_ok: false
+    domain: [INTERNET, DMZ, APP, DATA, CORP, MGMT, OT, LAB]
+  - name: destination
+    required: true
+    blank_ok: false
+    domain: [INTERNET, DMZ, APP, DATA, CORP, MGMT, OT, LAB]
+  - name: port
+    required: true
+    blank_ok: false
+    range: [0, 65535]
+    note: 0 代表整段範圍（所有 port），不是 port 零。
+  - name: action
+    required: true
+    blank_ok: false
+    domain: [allow, deny]
+  - name: verified_at
+    required: true
+    blank_ok: false
+    note: ISO 日期。政策也會過期——誰最後確認過這條規則還在。

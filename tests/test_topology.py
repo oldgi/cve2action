@@ -167,3 +167,88 @@ def test_some_findings_have_competing_remediations():
     """同一筆 finding 有多個候選措施，Day 26 才有東西可以比較。"""
     pairs = Counter((r["asset"], r["cve"]) for r in read("remediations.csv"))
     assert sum(1 for count in pairs.values() if count > 1) >= 3
+
+
+# --- 介面、服務、政策（Day 19／20 的前置資料） ------------------------------
+
+def test_every_interface_belongs_to_a_real_asset(assets):
+    for row in read("asset_interfaces.csv"):
+        assert row["asset_id"] in assets, row
+
+
+def test_thirty_interfaces_merge_into_twenty_assets(assets):
+    """成功標準 #2：多介面要併成穩定資產。這份資料是歸併的證據。"""
+    interfaces = read("asset_interfaces.csv")
+    assert len(interfaces) == 30
+    assert {i["asset_id"] for i in interfaces} == assets
+
+
+def test_merging_cannot_rely_on_ip_alone():
+    """VIP 會被兩台機器同時宣稱——照 IP 併會把兩台併成一台。"""
+    owners = defaultdict(set)
+    for row in read("asset_interfaces.csv"):
+        owners[row["ip"]].add(row["asset_id"])
+    shared = {ip: sorted(a) for ip, a in owners.items() if len(a) > 1}
+    assert shared == {"203.0.113.10": ["NS-WEB-PORTAL-01", "NS-WEB-PORTAL-02"]}
+
+
+def test_merging_cannot_rely_on_hostname_alone():
+    """同一張網卡掛多個名字——照 hostname 併會把一台拆成好幾台。"""
+    names = defaultdict(set)
+    for row in read("asset_interfaces.csv"):
+        names[row["mac"]].add(row["hostname"])
+    assert sum(1 for h in names.values() if len(h) > 1) == 3
+
+
+def test_the_shadow_host_has_no_interface(assets):
+    """掃到卻不在清冊上的主機不會有介面紀錄——那正是它 NEEDS_CONTEXT 的原因。"""
+    assert "NS-SHADOW-NAS-02" not in assets
+    assert all(r["asset_id"] != "NS-SHADOW-NAS-02" for r in read("asset_interfaces.csv"))
+
+
+def test_every_allowed_edge_reaches_a_listening_service():
+    """網路連得到不代表打得到：沒有服務在聽的 port，那條邊通往空氣。"""
+    services = {(s["asset_id"], int(s["port"])): s["state"] for s in read("services.csv")}
+    for edge in read("network_edges.csv"):
+        if edge["allowed"] != "yes":
+            continue
+        key = (edge["target"], int(edge["port"]))
+        assert key in services, f"{key} 沒有對應的服務"
+        assert services[key] == "listening", f"{key} 的 state 是 {services[key]}"
+
+
+def test_filtered_and_closed_services_exist_to_be_tested():
+    """三種 state 都要有樣本，否則 Day 20 的規則沒有被測到。"""
+    states = Counter(s["state"] for s in read("services.csv"))
+    assert states["listening"] >= 20
+    assert states["filtered"] >= 1 and states["closed"] >= 1
+
+
+def test_every_service_belongs_to_a_real_asset(assets):
+    for row in read("services.csv"):
+        assert row["asset_id"] in assets, row
+
+
+def test_policies_cover_every_zone_pair_the_edges_use():
+    """每一條跨 zone 的實際連線，都要找得到一條談論那個方向的政策。
+
+    找不到，代表這條連線沒有任何書面依據——Day 20 要把它標出來，不是忽略。
+    """
+    zone = {a["asset_id"]: a["zone"] for a in read("assets.csv")}
+    pairs = {(p["source_scope"], p["destination"]) for p in read("network_policies.csv")}
+    missing = set()
+    for edge in read("network_edges.csv"):
+        source = "INTERNET" if edge["source"] == INTERNET else zone[edge["source"]]
+        target = zone[edge["target"]]
+        if source != target and (source, target) not in pairs:
+            missing.add((source, target))
+    assert not missing, f"這些方向有實際連線卻沒有政策：{sorted(missing)}"
+
+
+def test_the_denied_edge_has_a_matching_deny_policy():
+    """LAB → CORP 的那條被拒絕的連線，政策上也要說得出來。"""
+    denied = [e for e in read("network_edges.csv") if e["allowed"] == "no"]
+    assert len(denied) == 1
+    policies = read("network_policies.csv")
+    assert any(p["source_scope"] == "LAB" and p["destination"] == "CORP"
+               and p["action"] == "deny" for p in policies)

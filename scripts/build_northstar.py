@@ -31,6 +31,9 @@ NETWORK_HEADER = ["source", "target", "port", "protocol", "allowed"]
 IDENTITY_HEADER = ["account", "source", "target", "privilege"]
 REMEDIATION_HEADER = ["remediation_id", "asset", "cve", "action", "effort_hours",
                       "downtime_minutes", "compatibility", "notes"]
+INTERFACE_HEADER = ["interface_id", "asset_id", "ip", "hostname", "mac", "interface_type"]
+SERVICE_HEADER = ["asset_id", "port", "protocol", "service", "version", "state"]
+POLICY_HEADER = ["policy_id", "source_scope", "destination", "port", "action", "verified_at"]
 CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
                   "business_criticality", "reachability_source", "control_source",
                   "business_source"]
@@ -166,6 +169,100 @@ REMEDIATIONS = [
     ("REM-015", "NS-WEB-PORTAL-01", "CVE-2013-2566", "config_change", 1, 0, "breaks_legacy_clients", "停用 RC4 密碼套件"),
 ]
 
+
+# 藍圖 §8.3：多介面資產歸併的證據（Day 19）。
+# 20 台資產、30 個介面——同一台機器的 service／management／backup／vip 介面各有 IP，
+# 弱掃若按 IP 回報就會把一台機器算成好幾台。歸併依據是 MAC 與 hostname，不是 IP。
+# NS-SHADOW-NAS-02 刻意不在這裡：掃描掃到它、清冊沒有它，那正是它 NEEDS_CONTEXT 的原因。
+ASSET_INTERFACES = [
+    ("IF-001", "NS-WEB-PORTAL-01", "203.0.113.11", "portal-a.northstar.example", "02:1a:00:00:11:01", "service"),
+    ("IF-002", "NS-WEB-PORTAL-01", "10.20.0.11", "portal-a-mgmt.northstar.example", "02:1a:00:00:11:02", "management"),
+    ("IF-003", "NS-WEB-PORTAL-01", "203.0.113.10", "www.northstar.example", "02:1a:00:00:11:01", "vip"),
+    ("IF-004", "NS-WEB-PORTAL-02", "203.0.113.12", "portal-b.northstar.example", "02:1a:00:00:12:01", "service"),
+    ("IF-005", "NS-WEB-PORTAL-02", "203.0.113.10", "www.northstar.example", "02:1a:00:00:12:01", "vip"),
+    ("IF-006", "NS-API-GW-01", "203.0.113.21", "api.northstar.example", "02:1a:00:00:21:01", "service"),
+    ("IF-007", "NS-API-GW-01", "10.20.0.21", "api-mgmt.northstar.example", "02:1a:00:00:21:02", "management"),
+    ("IF-008", "NS-MAIL-GW-01", "203.0.113.31", "mail.northstar.example", "02:1a:00:00:31:01", "service"),
+    ("IF-009", "NS-VPN-GW-01", "203.0.113.41", "vpn.northstar.example", "02:1a:00:00:41:01", "service"),
+    ("IF-010", "NS-EDGE-RTR-01", "203.0.113.1", "edge-rtr.northstar.example", "02:1a:00:00:01:01", "service"),
+    ("IF-011", "NS-EDGE-RTR-01", "10.20.0.1", "edge-rtr-mgmt.northstar.example", "02:1a:00:00:01:02", "management"),
+    ("IF-012", "NS-APP-ORDER-01", "10.30.1.11", "app-order-01.northstar.example", "02:1a:00:01:11:01", "service"),
+    ("IF-013", "NS-APP-ORDER-01", "10.20.1.11", "app-order-01-mgmt.northstar.example", "02:1a:00:01:11:02", "management"),
+    ("IF-014", "NS-APP-BILLING-01", "10.30.1.12", "app-billing-01.northstar.example", "02:1a:00:01:12:01", "service"),
+    ("IF-015", "NS-APP-INTRANET-01", "10.30.1.13", "intranet.northstar.example", "02:1a:00:01:13:01", "service"),
+    ("IF-016", "NS-APP-REPORT-01", "10.30.1.14", "report.northstar.example", "02:1a:00:01:14:01", "service"),
+    ("IF-017", "NS-DB-CUSTOMER-01", "10.40.1.11", "db-cust-01.northstar.example", "02:1a:00:02:11:01", "service"),
+    ("IF-018", "NS-DB-CUSTOMER-01", "10.41.1.11", "db-cust-01-bkp.northstar.example", "02:1a:00:02:11:02", "backup"),
+    ("IF-019", "NS-DB-BILLING-01", "10.40.1.12", "db-bill-01.northstar.example", "02:1a:00:02:12:01", "service"),
+    ("IF-020", "NS-DB-BILLING-01", "10.41.1.12", "db-bill-01-bkp.northstar.example", "02:1a:00:02:12:02", "backup"),
+    ("IF-021", "NS-BACKUP-01", "10.41.1.20", "backup-vault.northstar.example", "02:1a:00:02:20:01", "service"),
+    ("IF-022", "NS-FILE-SRV-01", "10.50.1.30", "files.northstar.example", "02:1a:00:03:30:01", "service"),
+    ("IF-023", "NS-AD-DC-01", "10.60.1.10", "dc01.northstar.example", "02:1a:00:04:10:01", "service"),
+    ("IF-024", "NS-AD-DC-01", "10.20.1.10", "dc01-mgmt.northstar.example", "02:1a:00:04:10:02", "management"),
+    ("IF-025", "NS-JUMP-01", "10.60.1.20", "jump01.northstar.example", "02:1a:00:04:20:01", "service"),
+    ("IF-026", "NS-MON-01", "10.60.1.30", "mon01.northstar.example", "02:1a:00:04:30:01", "service"),
+    ("IF-027", "NS-OPS-WS-07", "10.50.2.7", "ws-ops-07.northstar.example", "02:1a:00:03:07:01", "service"),
+    ("IF-028", "NS-PLC-DC-ENV", "10.70.1.5", "plc-hvac-01.northstar.example", "02:1a:00:05:05:01", "service"),
+    ("IF-029", "NS-LAB-CONFLUENCE-01", "10.80.1.9", "lab-wiki.northstar.example", "02:1a:00:06:09:01", "service"),
+    ("IF-030", "NS-LAB-CONFLUENCE-01", "10.80.1.10", "wiki-old.northstar.example", "02:1a:00:06:09:01", "service"),
+]
+
+# 有效攻擊面（Day 20）。每一條「允許」的連線，目的端都必須真的有服務在聽，
+# 否則那條邊通往空氣——有測試強制這件事。
+# state=filtered 代表服務在、但被主機防火牆擋住；路徑分析不得把它當成走得通。
+SERVICES = [
+    ("NS-EDGE-RTR-01", 443, "tcp", "ios-xe-webui", "17.6.1", "listening"),
+    ("NS-WEB-PORTAL-01", 443, "tcp", "apache-httpd", "2.4.49", "listening"),
+    ("NS-WEB-PORTAL-01", 80, "tcp", "apache-httpd", "2.4.49", "closed"),
+    ("NS-WEB-PORTAL-02", 443, "tcp", "apache-httpd", "2.4.49", "listening"),
+    ("NS-WEB-PORTAL-02", 80, "tcp", "apache-httpd", "2.4.49", "closed"),
+    ("NS-API-GW-01", 443, "tcp", "nginx", "1.20.1", "listening"),
+    ("NS-MAIL-GW-01", 443, "tcp", "exchange-owa", "15.2.792", "listening"),
+    ("NS-VPN-GW-01", 443, "tcp", "fortios-ssl-vpn", "6.0.4", "listening"),
+    ("NS-APP-ORDER-01", 8080, "tcp", "tomcat", "9.0.30", "listening"),
+    ("NS-APP-ORDER-01", 22, "tcp", "openssh", "8.2p1", "listening"),
+    ("NS-APP-ORDER-01", 9100, "tcp", "node-exporter", "1.3.1", "listening"),
+    ("NS-APP-BILLING-01", 8443, "tcp", "moveit-transfer", "15.0.1", "listening"),
+    ("NS-APP-INTRANET-01", 8090, "tcp", "confluence", "8.5.1", "listening"),
+    ("NS-APP-REPORT-01", 8009, "tcp", "tomcat-ajp", "9.0.30", "listening"),
+    ("NS-DB-CUSTOMER-01", 5432, "tcp", "postgresql", "14.5", "listening"),
+    ("NS-DB-BILLING-01", 5432, "tcp", "postgresql", "14.5", "listening"),
+    ("NS-BACKUP-01", 873, "tcp", "rsync", "3.2.3", "listening"),
+    ("NS-BACKUP-01", 445, "tcp", "smb", "1.0", "filtered"),
+    ("NS-FILE-SRV-01", 445, "tcp", "smb", "1.0", "listening"),
+    ("NS-FILE-SRV-01", 22, "tcp", "openssh", "7.4p1", "listening"),
+    ("NS-AD-DC-01", 389, "tcp", "ldap", "2019", "listening"),
+    ("NS-AD-DC-01", 3389, "tcp", "rdp", "10.0", "listening"),
+    ("NS-AD-DC-01", 445, "tcp", "netlogon", "2019", "listening"),
+    ("NS-JUMP-01", 3389, "tcp", "rdp", "10.0", "listening"),
+    ("NS-MON-01", 3000, "tcp", "grafana", "9.1.0", "listening"),
+    ("NS-OPS-WS-07", 445, "tcp", "smb", "3.1.1", "filtered"),
+    ("NS-PLC-DC-ENV", 44818, "tcp", "controllogix", "32.011", "listening"),
+    ("NS-LAB-CONFLUENCE-01", 8090, "tcp", "confluence", "7.13.0", "listening"),
+]
+
+# ACL 與正向列表（Day 20）。policy 以 zone 為範圍，network_edges 是實際觀測到的連線。
+# port=0 代表整段範圍。兩者不一致時以觀測為準，但差異必須被指出來——
+# 政策說不行卻連得通，就是設定漂移，不是把觀測刪掉了事。
+NETWORK_POLICIES = [
+    ("POL-01", "INTERNET", "DMZ", 443, "allow", "2026-09-12"),
+    ("POL-02", "INTERNET", "APP", 0, "deny", "2026-09-12"),
+    ("POL-03", "INTERNET", "DATA", 0, "deny", "2026-09-12"),
+    ("POL-04", "DMZ", "APP", 8080, "allow", "2026-09-12"),
+    ("POL-05", "DMZ", "APP", 8443, "allow", "2026-09-12"),
+    ("POL-06", "DMZ", "MGMT", 3389, "allow", "2026-08-30"),
+    ("POL-07", "DMZ", "DATA", 0, "deny", "2026-09-12"),
+    ("POL-08", "APP", "DATA", 5432, "allow", "2026-09-10"),
+    ("POL-09", "MGMT", "DATA", 5432, "allow", "2026-09-10"),
+    ("POL-10", "MGMT", "APP", 0, "allow", "2026-08-30"),
+    ("POL-11", "CORP", "MGMT", 3389, "allow", "2026-09-05"),
+    ("POL-12", "CORP", "DATA", 0, "deny", "2026-09-12"),
+    ("POL-13", "APP", "CORP", 445, "allow", "2026-09-10"),
+    ("POL-14", "MGMT", "CORP", 445, "allow", "2026-08-30"),
+    ("POL-15", "LAB", "CORP", 0, "deny", "2026-09-12"),
+    ("POL-16", "OT", "CORP", 0, "deny", "2026-09-12"),
+]
+
 SCENARIO_AS_OF = date(2026, 9, 24)
 
 # 40 筆掃描發現。真實弱掃報告是金字塔：少數 RCE、大量弱加密與資訊洩漏。
@@ -239,6 +336,9 @@ def main() -> None:
     write_csv("network_edges.csv", NETWORK_HEADER, NETWORK_EDGES)
     write_csv("identity_edges.csv", IDENTITY_HEADER, IDENTITY_EDGES)
     write_csv("remediations.csv", REMEDIATION_HEADER, REMEDIATIONS)
+    write_csv("asset_interfaces.csv", INTERFACE_HEADER, ASSET_INTERFACES)
+    write_csv("services.csv", SERVICE_HEADER, SERVICES)
+    write_csv("network_policies.csv", POLICY_HEADER, NETWORK_POLICIES)
     asset_dicts = [dict(zip(ASSET_HEADER, row, strict=True)) for row in ASSETS]
     control_dicts = [dict(zip(CONTROL_HEADER, row, strict=True)) for row in CONTROLS]
     business_dicts = [dict(zip(BUSINESS_HEADER, row, strict=True)) for row in BUSINESS]
@@ -275,6 +375,9 @@ def main() -> None:
           f"crown_jewels={sum(1 for a in ASSETS if a[6] == 'yes')} distinct_cves={len(cves)}")
     print(f"network_edges={len(NETWORK_EDGES)} identity_edges={len(IDENTITY_EDGES)} "
           f"remediations={len(REMEDIATIONS)}")
+    merged = len({row[1] for row in ASSET_INTERFACES})
+    print(f"interfaces={len(ASSET_INTERFACES)} -> {merged} assets; "
+          f"services={len(SERVICES)} policies={len(NETWORK_POLICIES)}")
     print(f"declared vs derived criticality: {len(disagreements)} disagreement(s)")
     for asset_id, declared, derived, source in disagreements:
         print(f"  {asset_id:<22} {declared:<10} -> {derived:<10} ({source})")

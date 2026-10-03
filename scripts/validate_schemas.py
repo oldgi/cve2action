@@ -35,6 +35,9 @@ TARGETS: dict[str, tuple[str, ...]] = {
     "network_edges": ("data/synthetic/northstar/network_edges.csv",),
     "identity_edges": ("data/synthetic/northstar/identity_edges.csv",),
     "remediations": ("data/synthetic/northstar/remediations.csv",),
+    "asset_interfaces": ("data/synthetic/northstar/asset_interfaces.csv",),
+    "services": ("data/synthetic/northstar/services.csv",),
+    "network_policies": ("data/synthetic/northstar/network_policies.csv",),
     # day-06／day-08 的 asset_context 是 Day 12 之前手寫的，沒有 source 欄位：
     # 它們記錄的是當時的契約，刻意不回頭補欄位，所以不套用現行 asset_context 契約。
 }

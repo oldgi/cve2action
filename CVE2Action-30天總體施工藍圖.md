@@ -343,9 +343,9 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 > | 漏洞適用性閘門 | Day 25 | 該日論點是「修漏洞不是唯一選項」，而最便宜的選項就是證明它不適用；處置模型本來就得把「不必修」表示成第一級結論，否則這些 finding 會無聲消失 |
 > | CVSS 排名並陳 | Day 28／29 | Day 29 的標題就是「模型真的比 CVSS 排序好嗎」，沒有並陳就答不了；Day 28 負責顯示，Day 29 負責驗證 |
 >
-> 連帶的資料前置：Day 19 需 `asset_interfaces.csv`、Day 20 需 `services.csv` 與
-> `network_policies.csv`、Day 25 需 `version_evidence.csv`。這四個檔在 §8.3 已有契約，
-> 但尚未建置（§8.2 的七項規模已於 2026-10-03 補齊）。
+> 連帶的資料前置：`asset_interfaces.csv`（Day 19）、`services.csv` 與
+> `network_policies.csv`（Day 20）已於 2026-10-03 一併建置；**仍缺 `version_evidence.csv`**
+> （Day 25 的適用性閘門需要它）。§8.2 的七項規模同日補齊。
 
 
 ## 11. 每篇文章固定模板
