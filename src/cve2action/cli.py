@@ -29,7 +29,9 @@ from .models import DECISION_NEEDS_CONTEXT
 from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
 from .rules import RulesError, load_rules
-from .scoring import explain_row, rank, rank_explained
+from .scoring import explain_row, rank, rank_explained, row_from
+from .scoring.acceptance import AcceptanceError, evaluate, load_criteria
+from .scoring.acceptance import report as acceptance_report
 from .scoring.calibration import CalibrationError, compare, load_baseline, report
 
 
@@ -131,6 +133,22 @@ def build_parser() -> argparse.ArgumentParser:
     cal_parser.add_argument("--controls", help="控制措施 CSV")
     cal_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
 
+    acc_parser = subparsers.add_parser(
+        "acceptance", help="逐條量評分門檻；沒過又沒有 waiver 即 exit 1"
+    )
+    for name, helptext in (
+        ("--scanner", "弱掃結果 CSV"),
+        ("--context", "資產企業脈絡 CSV"),
+        ("--rules", "Decision Rule 設定 YAML"),
+    ):
+        acc_parser.add_argument(name, required=True, help=helptext)
+    acc_parser.add_argument("--criteria", default="config/acceptance.yaml", help="門檻設定 YAML")
+    acc_parser.add_argument("--snapshots", help="NVD 快照目錄")
+    acc_parser.add_argument("--epss", help="EPSS 快照目錄")
+    acc_parser.add_argument("--kev", help="KEV 目錄快照所在目錄")
+    acc_parser.add_argument("--controls", help="控制措施 CSV")
+    acc_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
+
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
     )
@@ -224,6 +242,21 @@ def _run_calibrate(args) -> int:
         print(f"FAIL: {len(result.unexplained)} 處分歧沒有書面解釋", file=sys.stderr)
         return 1
     return 0
+
+
+def _run_acceptance(args) -> int:
+    try:
+        criteria = load_criteria(args.criteria)
+        inputs = _load_scoring_inputs(args)
+    except (RulesError, InputError, AcceptanceError, ValueError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    explanations = rank_explained(*inputs)
+    rows = [row_from(e) for e in explanations]
+    result = evaluate(criteria, inputs[2], rows, explanations)
+    print(acceptance_report(result))
+    return 0 if result.accepted else 1
 
 
 def _run_derive_context(args) -> int:
@@ -381,6 +414,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_explain(args)
     if args.command == "calibrate":
         return _run_calibrate(args)
+    if args.command == "acceptance":
+        return _run_acceptance(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)

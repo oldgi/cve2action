@@ -2,7 +2,7 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 規格版本 | 0.3.1（`config/risk_rules.yaml` 仍為 `0.3.0`——Day 16 沒有動規則，只動了結構） |
+| 規格版本 | 0.3.2（`config/risk_rules.yaml` 為 `0.3.0`、`config/acceptance.yaml` 為 `0.1.0`） |
 | 狀態 | Live——隨 ADR 更新；每次改動都要在 §8 留下一行 |
 | 依據 | [Day 5 文章](../articles/day-05.md)、[ADR-day-05](../decisions/ADR-day-05-decision-engine-v01.md) 起的 ADR 鏈（見 §8） |
 | 實作 | `src/cve2action/`：`rules.py`、`io.py`、`models.py`、`cli.py`、`collectors/`、`normalization/`、`scoring/` |
@@ -99,12 +99,17 @@ Priority Score = 10 × (0.35×S + 0.15×T + 0.25×E + 0.25×B)   （四捨五入
 
 分級（`priority_bands`）：
 
-| Priority | 分數 |
-|---|---|
-| Critical | 9.0–10.0 |
-| High | 7.0–8.99 |
-| Medium | 4.0–6.99 |
-| Low | 0–3.99 |
+| Priority（內部） | 分數 | Tier（對外） | 處置原則 |
+|---|---|---|---|
+| Critical | 9.0–10.0 | P0 | 緊急評估與處理 |
+| High | 7.0–8.99 | P1 | 納入下一個修補窗口 |
+| Medium | 4.0–6.99 | P2 | 排程處理或補強控制 |
+| Low | 0–3.99 | P3 | 監控、接受或定期複核 |
+
+`label` 是 0–10 內部刻度（所有回歸基準都用它），`tier` 是對外的處置層級，語彙與藍圖 §9.5 一致。
+門檻沿用 9.0／7.0／4.0，**未採用藍圖為 CRPS 乘法模型訂的 80/60/35**——實測套用後 38 筆中
+有 21 筆 P0，與 P0「緊急評估與處理」的定義矛盾。見
+[ADR-day-18（二）](../decisions/ADR-day-18-crps-tier-mapping.md)。
 
 **0.35/0.15/0.25/0.25 是起始假設，不是標準答案**；Day 17 以人工排序校準、Day 18 定門檻，
 任何權重或門檻變更必須留下 ADR。
@@ -145,14 +150,14 @@ Priority Score = 10 × (0.35×S + 0.15×T + 0.25×E + 0.25×B)   （四捨五入
 
 ## 5. 輸出契約：`ranked_result.csv`
 
-欄位順序固定（16 欄）：
+欄位順序固定（17 欄）：
 
 ```text
 asset, cve, cvss, cvss_version, cvss_source,
 threat, threat_source,
 environment, control_effectiveness, control_source,
 effective_exposure, business_criticality,
-priority_score, priority, decision, reason
+priority_score, priority, priority_tier, decision, reason
 ```
 
 - `decision`：`SCORED` 或 `NEEDS_CONTEXT`。
@@ -211,7 +216,9 @@ uv run cve2action explain --cve CVE-2020-1472   --scanner ... --context ... --ru
 兩筆 NEEDS_CONTEXT 固定為 `NS-SHADOW-NAS-02`（清冊外的機器）與
 `NS-MAIL-GW-01 / CVE-2011-3389`（NVD 無 v3.1，掃描器也沒給值）。
 
-**Low 恆為 0 是已知缺口**，留給 Day 18 校準。
+**Low 恆為 0 不是公式缺陷**（Day 18 更正）：合成探針顯示四個分級都構造得出來，
+例如 `CVSS 5.5 / ISOLATED / STRONG / NORMAL → 3.95 Low`。Northstar 沒有 Low，
+是因為它沒有「低嚴重度 × 隔離 × 不重要」的組合。詳見 [ADR-day-18](../decisions/ADR-day-18-scoring-acceptance.md)。
 
 ## 7. 完整流程重現
 
@@ -255,6 +262,25 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv \
 | 0.2.0 | 14 | 加入第四項 `T`，權重改 0.35/0.15/0.25/0.25；無資料時退回 severity | [ADR-day-14](../decisions/ADR-day-14-threat-enrichment.md) |
 | 0.3.0 | 15 | 控制適用性先於強度；輸出加 `control_effectiveness` / `control_source` | [ADR-day-15](../decisions/ADR-day-15-control-calibration.md) |
 | 0.3.1 | 16 | Explanation 成為計分的第一級產物，列與理由改為其投影；`engine` 移入 `scoring/` | [ADR-day-16](../decisions/ADR-day-16-explain-api.md) |
+| 0.3.2 | 17–18 | 校準基準與分歧解釋；八條評分門檻與豁免機制，v0.1 baseline 凍結 | [ADR-day-17](../decisions/ADR-day-17-calibration-test.md)、[ADR-day-18](../decisions/ADR-day-18-scoring-acceptance.md) |
+| 0.3.3 | 18 | 對外新增 P0–P3 處置層級；CRPS 乘法模型延後至 v1.0 之後 | [ADR-day-18（二）](../decisions/ADR-day-18-crps-tier-mapping.md) |
+
+## 8.1 v0.1 評分門檻（Day 18）
+
+「可用」的定義在 [`config/acceptance.yaml`](../../config/acceptance.yaml)，八條，分兩種：
+
+- **structural**（3 條）——公式本身的性質，用合成探針驗證，與資料集無關：
+  四個分級都構造得出來、缺資料不得讓分數變低、任一因子單獨變大分數不得下降。
+- **empirical**（5 條）——在 Northstar 上量：完整可解釋性、分辨力、分級平衡、值域利用、頂端飽和。
+
+結果 6 通過、2 豁免（`band_balance` 0.6316、`range_coverage` 0.44）、0 阻擋。兩條失敗同一個
+根因——值域映射只有三到五檔，輸出不可能比輸入細——都豁免到 Day 20 的可達性引擎之後重新量。
+
+```bash
+uv run cve2action acceptance --scanner ... --context ... --rules ... --criteria config/acceptance.yaml
+```
+
+沒過又沒有 waiver 即 exit 1；CI 每次都跑。`waivers` 缺 `reason` 或 `revisit_on` 會被拒絕載入。
 
 ## 9. 非目標（目前明確不做）
 
@@ -266,4 +292,7 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv \
 - 攻擊路徑、圖形模型、Choke Point（Day 19–24）。
 - 修補建議與 What-if（Day 25–27）。
 - Dashboard（Day 28）。
+- **CRPS 乘法模型**（藍圖 §9.5 的 `100 × L^0.45 × I^0.35 × A^0.20 × (1−0.6C)`）。
+  對外層級 P0–P3 已接上，但分數仍是 0–10 的加法 baseline；`L`／`I` 的子因子
+  （`E_CVSS`、`B_CIA`、`B_Blast`）目前沒有資料來源，硬做就是補零。
 - 自動修補、Ticket 整合、LLM 決策。

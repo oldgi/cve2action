@@ -58,6 +58,9 @@ class Explanation:
     factors: tuple[Factor, ...] = ()
     score: float | None = None
     band: str = ""
+    # 對外的處置層級與建議動作（Day 18）；內部計算一律用 band
+    tier: str = ""
+    action: str = ""
     gaps: tuple[str, ...] = ()
     # 威脅項缺席、權重退回 severity 時為 True（開發規格 §3.2）
     degraded: bool = False
@@ -105,6 +108,8 @@ class Explanation:
             "decision": self.decision,
             "score": self.score,
             "band": self.band,
+            "tier": self.tier,
+            "action": self.action,
             "formula": self.formula,
             "degraded": self.degraded,
             "gaps": list(self.gaps),
@@ -153,7 +158,8 @@ def explain_row(explanation: Explanation, above: Explanation | None = None) -> s
         lines.append("  未評分不是漏掉，是拒絕在缺資料時猜一個分數。")
         return "\n".join(lines)
 
-    lines.append(f"  score    : {explanation.score:g}  [{explanation.band}]")
+    tier = f"  {explanation.tier} {explanation.action}" if explanation.tier else ""
+    lines.append(f"  score    : {explanation.score:g}  [{explanation.band}]{tier}")
     lines.append(f"  formula  : {explanation.formula}")
     if explanation.degraded:
         lines.append("             （無威脅資料：該項移除，權重退回 severity）")

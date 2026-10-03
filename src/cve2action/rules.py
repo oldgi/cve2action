@@ -53,9 +53,15 @@ def _parse_bands(raw: dict) -> tuple[PriorityBand, ...]:
     if not isinstance(entries, list) or not entries:
         raise RulesError("risk_rules.yaml: missing 'priority_bands'")
     bands = tuple(
-        PriorityBand(label=str(e["label"]), floor=float(e["floor"]), ceiling=float(e["ceiling"]))
+        PriorityBand(label=str(e["label"]), floor=float(e["floor"]), ceiling=float(e["ceiling"]),
+                     tier=str(e.get("tier", "")), action=str(e.get("action", "")))
         for e in entries
     )
+    tiers = [b.tier for b in bands]
+    if not all(tiers) or len(set(tiers)) != len(tiers):
+        raise RulesError(
+            "risk_rules.yaml: 每個 priority_band 都要有唯一的 tier（對外的 P0–P3 層級）"
+        )
     ordered = sorted(bands, key=lambda b: b.floor)
     if ordered[0].floor != 0.0 or ordered[-1].ceiling != 10.0:
         raise RulesError("risk_rules.yaml: priority_bands must cover 0–10")

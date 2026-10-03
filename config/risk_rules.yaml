@@ -117,8 +117,15 @@ business_criticality:
   IMPORTANT: 0.7
   NORMAL: 0.4
 
+# label 是內部刻度（0–10，Day 5 以來所有基準都用它）；tier 是對外呈現的處置層級，
+# 語彙與藍圖 §9.5 一致，讓 §9.6 的覆寫規則（「至少 P0」）之後寫得出來。
+#
+# 門檻沿用 9.0/7.0/4.0，**不採用藍圖的 80/60/35**。那組門檻是為 CRPS 乘法模型訂的，
+# 乘法會把分數拉得很開；我們的加法分數結構上有地板（實測落在 56–100），把 80/60/35
+# 搬過來會得到 38 筆裡 21 筆 P0——而 P0 的定義是「緊急評估與處理」，21 件緊急等於沒有緊急。
+# 門檻與公式是一對，只搬一半會壞掉。詳見 ADR-day-18-crps-tier-mapping。
 priority_bands:
-  - { label: Critical, floor: 9.0, ceiling: 10.0 }
-  - { label: High,     floor: 7.0, ceiling: 8.99 }
-  - { label: Medium,   floor: 4.0, ceiling: 6.99 }
-  - { label: Low,      floor: 0.0, ceiling: 3.99 }
+  - { label: Critical, tier: P0, floor: 9.0, ceiling: 10.0, action: 緊急評估與處理 }
+  - { label: High,     tier: P1, floor: 7.0, ceiling: 8.99, action: 納入下一個修補窗口 }
+  - { label: Medium,   tier: P2, floor: 4.0, ceiling: 6.99, action: 排程處理或補強控制 }
+  - { label: Low,      tier: P3, floor: 0.0, ceiling: 3.99, action: 監控、接受或定期複核 }

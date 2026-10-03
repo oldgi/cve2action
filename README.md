@@ -11,11 +11,11 @@
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | `0.2.0`（已發行 `v0.2.0-data`）；開發中朝向 `v0.3.0-scoring`（Day 18） |
-| 進度 | Day 1–15 已發表；做評分階段（Day 11–18）進行中 |
+| 版本 | `0.2.0`（已發行 `v0.2.0-data`）；`v0.3.0-scoring` 門檻已通過（Day 18） |
+| 進度 | Day 1–16 已發表，17–18 待發；做評分階段（Day 11–18）完成 |
 | Decision Rule | `config/risk_rules.yaml` 版本 `0.3.0` |
-| 規模 | 228 個測試、Northstar 模擬資料 20 資產 / 40 findings |
-| 最近修訂 | 2026-10-01 |
+| 規模 | 305 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
+| 最近修訂 | 2026-10-03 |
 
 施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ **做評分（11–18）** → 畫攻擊路徑（19–24）→ 給修補建議（25–30）
 
@@ -93,6 +93,10 @@ uv run cve2action rank \
 | [ADR-day-13](docs/decisions/ADR-day-13-business-impact.md) | 業務衝擊由可查證事實推導 |
 | [ADR-day-14](docs/decisions/ADR-day-14-threat-enrichment.md) | EPSS 與 KEV 進入公式，取大不取平均 |
 | [ADR-day-15](docs/decisions/ADR-day-15-control-calibration.md) | 控制措施的適用性先於強度 |
+| [ADR-day-16](docs/decisions/ADR-day-16-explain-api.md) | 理由是計分的產物，不是計分後的字串 |
+| [ADR-day-17](docs/decisions/ADR-day-17-calibration-test.md) | 校準的產出是分歧清單，不是相關係數 |
+| [ADR-day-18](docs/decisions/ADR-day-18-scoring-acceptance.md) | v0.1 評分門檻與明確不修的部分 |
+| [ADR-day-18（二）](docs/decisions/ADR-day-18-crps-tier-mapping.md) | 對外用 P0–P3，CRPS 乘法模型延後 |
 
 **文章**（`docs/articles/`，Day 01–15 皆在此）
 
@@ -100,7 +104,9 @@ uv run cve2action rank \
 |---|---|
 | 定邊界 | [Day 1](docs/articles/day-01.md)・[2](docs/articles/day-02.md)・[3](docs/articles/day-03.md)・[4](docs/articles/day-04.md)・[5](docs/articles/day-05.md) |
 | 接資料 | [Day 6](docs/articles/day-06.md)・[7](docs/articles/day-07.md)・[8](docs/articles/day-08.md)・[9](docs/articles/day-09.md)・[10](docs/articles/day-10.md) |
-| 做評分 | [Day 11](docs/articles/day-11.md)・[12](docs/articles/day-12.md)・[13](docs/articles/day-13.md)・[14](docs/articles/day-14.md)・[15](docs/articles/day-15.md) |
+| 做評分 | [Day 11](docs/articles/day-11.md)・[12](docs/articles/day-12.md)・[13](docs/articles/day-13.md)・[14](docs/articles/day-14.md)・[15](docs/articles/day-15.md)・[16](docs/articles/day-16.md)・[17](docs/articles/day-17.md)・[18](docs/articles/day-18.md) |
+
+**番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化，以及加法／幾何平均之外還有哪些形式。
 
 **研究備忘**：[Day 2 案例設計](docs/research/day-02-case-design.md)、[Day 3 概念與邊界](docs/research/day-03-concepts-and-boundaries.md)
 
@@ -117,6 +123,7 @@ config/risk_rules.yaml    權重、值域、分級、控制適用範圍
 data/schemas/             資料契約（CI 強制驗證）
 data/snapshots/           NVD / EPSS / KEV 的固定快照
 data/synthetic/northstar/ 虛構企業資料集，可由 scripts/build_northstar.py 重建
+  資產 20／findings 40／控制 8／Crown Jewel 4／網路連線 25／帳號關係 10／候選措施 15
 ```
 
 兩處與藍圖 §12 的命名差異，是刻意保留的既成事實，改名會打斷既有連結：

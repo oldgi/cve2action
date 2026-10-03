@@ -62,6 +62,33 @@ jobs:
           --as-of 2026-09-24
           --out ranked_result.csv
 
+      # Day 17／18 的兩道閘門：校準分歧必須有書面解釋、評分門檻沒過必須有 waiver。
+      - name: Calibration against the frozen expert ranking
+        run: >
+          uv run cve2action calibrate
+          --scanner data/synthetic/northstar/scanner.csv
+          --context data/synthetic/northstar/asset_context.csv
+          --rules config/risk_rules.yaml
+          --snapshots data/snapshots/nvd
+          --epss data/snapshots/epss
+          --kev data/snapshots/kev
+          --controls data/synthetic/northstar/controls.csv
+          --as-of 2026-09-24
+          --baseline data/calibration/day-17-expert-ranking.yaml
+
+      - name: Scoring acceptance gate
+        run: >
+          uv run cve2action acceptance
+          --scanner data/synthetic/northstar/scanner.csv
+          --context data/synthetic/northstar/asset_context.csv
+          --rules config/risk_rules.yaml
+          --criteria config/acceptance.yaml
+          --snapshots data/snapshots/nvd
+          --epss data/snapshots/epss
+          --kev data/snapshots/kev
+          --controls data/synthetic/northstar/controls.csv
+          --as-of 2026-09-24
+
       # 推導與評分都離線，重跑必須得到與版控完全相同的結果；
       # 有任何差異就代表快照、規則或推導邏輯動了而沒有一起更新資料集。
       - name: Committed dataset must be reproducible

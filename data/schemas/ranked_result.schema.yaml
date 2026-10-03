@@ -1,5 +1,5 @@
 file: ranked_result.csv
-version: "1.2.0"
+version: "1.3.0"
 produced_by: cve2action rank（io.write_ranked_result）
 consumed_by: 人、Day 16 的 Explain API、Day 28 的 Dashboard
 description: >
@@ -62,6 +62,14 @@ columns:
     required: true
     blank_ok: true
     domain: [Critical, High, Medium, Low, ""]
+  - name: priority_tier
+    required: true
+    blank_ok: true
+    domain: [P0, P1, P2, P3, ""]
+    note: >
+      對外呈現的處置層級，語彙與藍圖 §9.5 一致（P0 緊急評估與處理／P1 下一個修補窗口／
+      P2 排程處理或補強控制／P3 監控、接受或定期複核）。門檻沿用 0–10 刻度的 9/7/4，
+      未採用藍圖為 CRPS 乘法模型設計的 80/60/35——見 ADR-day-18-crps-tier-mapping。
   - name: decision
     required: true
     blank_ok: false

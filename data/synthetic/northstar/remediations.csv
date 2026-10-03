@@ -1,0 +1,16 @@
+remediation_id,asset,cve,action,effort_hours,downtime_minutes,compatibility,notes
+REM-001,NS-EDGE-RTR-01,CVE-2023-20198,patch,2,15,none,廠商已釋出修補；需重啟
+REM-002,NS-EDGE-RTR-01,CVE-2023-20198,disable_service,1,0,none,關閉 WebUI 管理介面，改用 CLI
+REM-003,NS-APP-BILLING-01,CVE-2023-34362,patch,4,30,none,MOVEit 升級至修補版本
+REM-004,NS-APP-BILLING-01,CVE-2023-34362,isolate,2,0,breaks_partner_upload,暫時移除對外傳輸介面
+REM-005,NS-API-GW-01,CVE-2021-44228,patch,3,20,none,log4j2 升級
+REM-006,NS-API-GW-01,CVE-2021-44228,compensating_control,1,0,none,WAF 規則比對 JNDI 字串；擋得住已知樣態，不是根治
+REM-007,NS-APP-ORDER-01,CVE-2021-44228,patch,3,20,none,同一個 CVE，三台機器各自要排
+REM-008,NS-APP-ORDER-01,CVE-2021-44228,config_change,1,10,none,移除 JndiLookup class，不動版本
+REM-009,NS-MON-01,CVE-2021-44228,compensating_control,1,0,vendor_appliance,監控套件不可自行升版，只能移除 JndiLookup
+REM-010,NS-DB-CUSTOMER-01,CVE-2021-3156,patch,1,5,none,sudo 套件更新
+REM-011,NS-DB-BILLING-01,CVE-2022-0847,patch,2,45,requires_kernel_reboot,核心更新，需安排維護窗口
+REM-012,NS-AD-DC-01,CVE-2020-1472,patch,3,60,legacy_client_risk,Netlogon 強制安全通道，舊用戶端可能失效
+REM-013,NS-JUMP-01,CVE-2019-0708,config_change,1,0,none,啟用 NLA，把免驗證利用擋在驗證之前
+REM-014,NS-LAB-CONFLUENCE-01,CVE-2022-26134,isolate,1,0,none,實驗室系統，直接從網路移除比排修補快
+REM-015,NS-WEB-PORTAL-01,CVE-2013-2566,config_change,1,0,breaks_legacy_clients,停用 RC4 密碼套件

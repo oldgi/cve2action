@@ -36,6 +36,7 @@ OUTPUT_COLUMNS = (
     "business_criticality",
     "priority_score",
     "priority",
+    "priority_tier",
     "decision",
     "reason",
 )
@@ -46,11 +47,17 @@ DECISION_NEEDS_CONTEXT = "NEEDS_CONTEXT"
 
 @dataclass(frozen=True)
 class PriorityBand:
-    """單一優先分級：score 落在 [floor, ceiling] 之內（含端點）。"""
+    """單一優先分級：score 落在 [floor, ceiling] 之內（含端點）。
+
+    `label` 是 0–10 內部刻度的名稱（Day 5 以來的基準都用它）；
+    `tier` 是對外呈現的處置層級 P0–P3，語彙與藍圖 §9.5 一致（Day 18）。
+    """
 
     label: str
     floor: float
     ceiling: float
+    tier: str = ""
+    action: str = ""
 
 
 @dataclass(frozen=True)
@@ -77,7 +84,14 @@ class RiskRules:
     controls: object | None = None
 
     def band_for(self, score: float) -> str:
+        return self.band_object_for(score).label
+
+    def tier_for(self, score: float) -> str:
+        """對外的處置層級 P0–P3；內部計算一律用 label。"""
+        return self.band_object_for(score).tier
+
+    def band_object_for(self, score: float) -> PriorityBand:
         for band in self.priority_bands:
             if band.floor <= score <= band.ceiling:
-                return band.label
+                return band
         raise ValueError(f"priority score {score} falls outside all configured bands")
