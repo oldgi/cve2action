@@ -38,11 +38,16 @@ def ranked() -> dict[tuple[str, str], dict]:
 # --- 藍圖 §8.2 規模 -----------------------------------------------------------
 
 def test_dataset_matches_blueprint_scale():
-    assets, findings, controls = read("assets.csv"), read("scanner.csv"), read("controls.csv")
+    """藍圖 §8.2 列了七項規模。Day 11 只建了四項，而這條測試當時只檢查那四項——
+    於是它一直是綠的，缺的三項到 Day 18 盤點才被發現。七項現在全部檢查。"""
+    assets = read("assets.csv")
     assert len(assets) == len(read("business_context.csv")) == 20
-    assert len(findings) == 40
-    assert len(controls) == 8
+    assert len(read("scanner.csv")) == 40
+    assert len(read("controls.csv")) == 8
     assert sum(1 for a in assets if a["crown_jewel"] == "yes") == 4
+    assert len(read("network_edges.csv")) == 25
+    assert len(read("identity_edges.csv")) == 10
+    assert len(read("remediations.csv")) == 15
 
 
 def test_ids_are_unique_and_every_context_row_has_an_asset():

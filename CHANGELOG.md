@@ -27,6 +27,9 @@
 
 ### Changed
 
+- **更正一個從 Day 11 延續到 Day 17 的錯誤說法**：「v0.1 公式產不出 Low」是錯的。合成探針顯示四個分級都構造得出來（`CVSS 5.5 / ISOLATED / STRONG / NORMAL → 3.95 Low`）；Northstar 沒有 Low，是因為沒有「低嚴重度 × 隔離 × 不重要」的組合。測試註解與規格文件已更正。
+- `test_dataset_matches_blueprint_scale` 補齊檢查：藍圖 §8.2 有七項規模，原本只檢查建好的四項，缺的三項因此一直沒被發現。
+- 未採用藍圖為 CRPS 乘法模型訂的 P0–P3 門檻 80/60/35：套到加法分數上會產生 38 筆中 21 筆 P0，與 P0「緊急評估與處理」的定義矛盾。沿用 9.0/7.0/4.0，量測結果有回歸測試釘住。
 - `engine.py` 移入 `scoring/`（藍圖 §12），與 `explain.py` 同層；`models.py`、`rules.py`、`io.py` 留在套件根目錄，因為攻擊路徑與修補建議也要用。舊路徑 `from cve2action.engine import rank` 保留相容層。排序只實作在 `rank_explained()` 一次，`rank()` 是它的列投影，兩者不可能排出不同順序。輸出內容完全不變。
 - **破壞性變更**：`cve2action derive-context` 新增必填參數 `--business`（業務脈絡 CSV），輸出新增 `business_source` 欄；某資產缺業務事實時以 exit code 2 中止，不再靜默產出空值。
 - 施工藍圖收斂為根目錄一份：`docs/` 底下那份停留在 Day 5 之前，Day 6 起日程整個錯開一天，而 README 的文件入口正指向它。其獨有的第 20 節（Day 2 設計修訂，含 Day 10/18/24/30 補充驗收）先併入現行版後才刪除。

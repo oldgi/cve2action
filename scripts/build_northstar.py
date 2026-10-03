@@ -27,6 +27,10 @@ ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role",
                 "declared_criticality", "crown_jewel", "owner_team"]
 BUSINESS_HEADER = ["asset_id", "data_class", "rto_hours", "customer_facing", "notes"]
 CONTROL_HEADER = ["asset_id", "control_type", "effectiveness", "evidence", "verified_at"]
+NETWORK_HEADER = ["source", "target", "port", "protocol", "allowed"]
+IDENTITY_HEADER = ["account", "source", "target", "privilege"]
+REMEDIATION_HEADER = ["remediation_id", "asset", "cve", "action", "effort_hours",
+                      "downtime_minutes", "compatibility", "notes"]
 CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
                   "business_criticality", "reachability_source", "control_source",
                   "business_source"]
@@ -94,6 +98,74 @@ CONTROLS = [
 ]
 
 # 情境時點。必須固定，不能用今天的日期——否則控制證據的年齡每天都變，資料集就不可重現。
+
+# 藍圖 §8.2：25 條網路連線。INTERNET 是外部來源的虛擬節點。
+# allowed=no 的那一條是刻意留的：未允許的連線不得被當成可達路徑（§16 Day 24 門檻）。
+# NS-PLC-DC-ENV 一條邊都沒有——「沒有已知路徑」不等於「證明不可達」，Day 22 不得混用。
+NETWORK_EDGES = [
+    ("INTERNET", "NS-EDGE-RTR-01", 443, "tcp", "yes"),
+    ("INTERNET", "NS-WEB-PORTAL-01", 443, "tcp", "yes"),
+    ("INTERNET", "NS-WEB-PORTAL-02", 443, "tcp", "yes"),
+    ("INTERNET", "NS-API-GW-01", 443, "tcp", "yes"),
+    ("INTERNET", "NS-MAIL-GW-01", 443, "tcp", "yes"),
+    ("INTERNET", "NS-VPN-GW-01", 443, "tcp", "yes"),
+    ("NS-WEB-PORTAL-01", "NS-APP-ORDER-01", 8080, "tcp", "yes"),
+    ("NS-WEB-PORTAL-02", "NS-APP-ORDER-01", 8080, "tcp", "yes"),
+    ("NS-API-GW-01", "NS-APP-ORDER-01", 8080, "tcp", "yes"),
+    ("NS-API-GW-01", "NS-APP-BILLING-01", 8443, "tcp", "yes"),
+    ("NS-VPN-GW-01", "NS-JUMP-01", 3389, "tcp", "yes"),
+    ("NS-MAIL-GW-01", "NS-AD-DC-01", 389, "tcp", "yes"),
+    ("NS-APP-ORDER-01", "NS-DB-CUSTOMER-01", 5432, "tcp", "yes"),
+    ("NS-APP-BILLING-01", "NS-DB-BILLING-01", 5432, "tcp", "yes"),
+    ("NS-APP-REPORT-01", "NS-DB-CUSTOMER-01", 5432, "tcp", "yes"),
+    ("NS-APP-INTRANET-01", "NS-FILE-SRV-01", 445, "tcp", "yes"),
+    ("NS-JUMP-01", "NS-DB-CUSTOMER-01", 5432, "tcp", "yes"),
+    ("NS-JUMP-01", "NS-DB-BILLING-01", 5432, "tcp", "yes"),
+    ("NS-JUMP-01", "NS-AD-DC-01", 3389, "tcp", "yes"),
+    ("NS-JUMP-01", "NS-APP-ORDER-01", 22, "tcp", "yes"),
+    ("NS-MON-01", "NS-APP-ORDER-01", 9100, "tcp", "yes"),
+    ("NS-AD-DC-01", "NS-FILE-SRV-01", 445, "tcp", "yes"),
+    ("NS-OPS-WS-07", "NS-JUMP-01", 3389, "tcp", "yes"),
+    ("NS-DB-CUSTOMER-01", "NS-BACKUP-01", 873, "tcp", "yes"),
+    ("NS-LAB-CONFLUENCE-01", "NS-FILE-SRV-01", 445, "tcp", "no"),
+]
+
+# 藍圖 §8.2：10 條帳號或權限關係。break_glass 那一條對應 controls.csv 裡
+# NS-JUMP-01 的 mfa/PARTIAL 證據「session recording gaps on break-glass account」。
+IDENTITY_EDGES = [
+    ("svc_order", "NS-APP-ORDER-01", "NS-DB-CUSTOMER-01", "db_read_write"),
+    ("svc_billing", "NS-APP-BILLING-01", "NS-DB-BILLING-01", "db_read_write"),
+    ("svc_report", "NS-APP-REPORT-01", "NS-DB-CUSTOMER-01", "db_read_only"),
+    ("svc_backup", "NS-BACKUP-01", "NS-DB-CUSTOMER-01", "db_read_only"),
+    ("svc_monitor", "NS-MON-01", "NS-APP-ORDER-01", "local_service"),
+    ("adm_platform", "NS-JUMP-01", "NS-DB-CUSTOMER-01", "local_admin"),
+    ("adm_platform", "NS-JUMP-01", "NS-DB-BILLING-01", "local_admin"),
+    ("adm_domain", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin"),
+    ("break_glass", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin"),
+    ("ops_desktop", "NS-OPS-WS-07", "NS-JUMP-01", "interactive_logon"),
+]
+
+# 藍圖 §8.2：15 種候選修補措施。以 (asset, cve) 為鍵——scanner.csv 沒有 finding_id，
+# 而 (資產, 漏洞) 本來就是全專案一致的自然鍵（見 scoring/calibration.key_of）。
+# effort_hours／downtime_minutes 是虛構估計；Day 26 的成本比較會用到，Day 19 還不會。
+REMEDIATIONS = [
+    ("REM-001", "NS-EDGE-RTR-01", "CVE-2023-20198", "patch", 2, 15, "none", "廠商已釋出修補；需重啟"),
+    ("REM-002", "NS-EDGE-RTR-01", "CVE-2023-20198", "disable_service", 1, 0, "none", "關閉 WebUI 管理介面，改用 CLI"),
+    ("REM-003", "NS-APP-BILLING-01", "CVE-2023-34362", "patch", 4, 30, "none", "MOVEit 升級至修補版本"),
+    ("REM-004", "NS-APP-BILLING-01", "CVE-2023-34362", "isolate", 2, 0, "breaks_partner_upload", "暫時移除對外傳輸介面"),
+    ("REM-005", "NS-API-GW-01", "CVE-2021-44228", "patch", 3, 20, "none", "log4j2 升級"),
+    ("REM-006", "NS-API-GW-01", "CVE-2021-44228", "compensating_control", 1, 0, "none", "WAF 規則比對 JNDI 字串；擋得住已知樣態，不是根治"),
+    ("REM-007", "NS-APP-ORDER-01", "CVE-2021-44228", "patch", 3, 20, "none", "同一個 CVE，三台機器各自要排"),
+    ("REM-008", "NS-APP-ORDER-01", "CVE-2021-44228", "config_change", 1, 10, "none", "移除 JndiLookup class，不動版本"),
+    ("REM-009", "NS-MON-01", "CVE-2021-44228", "compensating_control", 1, 0, "vendor_appliance", "監控套件不可自行升版，只能移除 JndiLookup"),
+    ("REM-010", "NS-DB-CUSTOMER-01", "CVE-2021-3156", "patch", 1, 5, "none", "sudo 套件更新"),
+    ("REM-011", "NS-DB-BILLING-01", "CVE-2022-0847", "patch", 2, 45, "requires_kernel_reboot", "核心更新，需安排維護窗口"),
+    ("REM-012", "NS-AD-DC-01", "CVE-2020-1472", "patch", 3, 60, "legacy_client_risk", "Netlogon 強制安全通道，舊用戶端可能失效"),
+    ("REM-013", "NS-JUMP-01", "CVE-2019-0708", "config_change", 1, 0, "none", "啟用 NLA，把免驗證利用擋在驗證之前"),
+    ("REM-014", "NS-LAB-CONFLUENCE-01", "CVE-2022-26134", "isolate", 1, 0, "none", "實驗室系統，直接從網路移除比排修補快"),
+    ("REM-015", "NS-WEB-PORTAL-01", "CVE-2013-2566", "config_change", 1, 0, "breaks_legacy_clients", "停用 RC4 密碼套件"),
+]
+
 SCENARIO_AS_OF = date(2026, 9, 24)
 
 # 40 筆掃描發現。真實弱掃報告是金字塔：少數 RCE、大量弱加密與資訊洩漏。
@@ -164,6 +236,9 @@ def main() -> None:
     write_csv("assets.csv", ASSET_HEADER, ASSETS)
     write_csv("controls.csv", CONTROL_HEADER, CONTROLS)
     write_csv("business_context.csv", BUSINESS_HEADER, BUSINESS)
+    write_csv("network_edges.csv", NETWORK_HEADER, NETWORK_EDGES)
+    write_csv("identity_edges.csv", IDENTITY_HEADER, IDENTITY_EDGES)
+    write_csv("remediations.csv", REMEDIATION_HEADER, REMEDIATIONS)
     asset_dicts = [dict(zip(ASSET_HEADER, row, strict=True)) for row in ASSETS]
     control_dicts = [dict(zip(CONTROL_HEADER, row, strict=True)) for row in CONTROLS]
     business_dicts = [dict(zip(BUSINESS_HEADER, row, strict=True)) for row in BUSINESS]
@@ -198,6 +273,8 @@ def main() -> None:
                      for a in asset_dicts if a["declared_criticality"] != a["criticality"]]
     print(f"assets={len(ASSETS)} findings={len(FINDINGS)} controls={len(CONTROLS)} "
           f"crown_jewels={sum(1 for a in ASSETS if a[6] == 'yes')} distinct_cves={len(cves)}")
+    print(f"network_edges={len(NETWORK_EDGES)} identity_edges={len(IDENTITY_EDGES)} "
+          f"remediations={len(REMEDIATIONS)}")
     print(f"declared vs derived criticality: {len(disagreements)} disagreement(s)")
     for asset_id, declared, derived, source in disagreements:
         print(f"  {asset_id:<22} {declared:<10} -> {derived:<10} ({source})")

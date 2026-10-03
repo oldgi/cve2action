@@ -1,0 +1,30 @@
+file: network_edges.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構拓樸）
+consumed_by: Day 19 圖模型、Day 20 可達性引擎、Day 22 路徑分析
+description: >
+  一列一條有向網路連線。`INTERNET` 是外部來源的虛擬節點，不是資產。
+  **沒有邊不等於證明不可達**——它只代表這份清冊沒有記錄到路徑；
+  Day 22 的路徑分析必須把兩者分開，不得把「查無路徑」寫成「不存在路徑」。
+columns:
+  - name: source
+    required: true
+    blank_ok: false
+    note: asset_id，或虛擬節點 INTERNET。
+  - name: target
+    required: true
+    blank_ok: false
+    note: 必須是 assets.csv 裡的 asset_id。
+  - name: port
+    required: true
+    blank_ok: false
+    range: [1, 65535]
+  - name: protocol
+    required: true
+    blank_ok: false
+    domain: [tcp, udp]
+  - name: allowed
+    required: true
+    blank_ok: false
+    domain: ["yes", "no"]
+    note: no 代表政策明確拒絕；被拒絕的連線不得構成攻擊路徑。

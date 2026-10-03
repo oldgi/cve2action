@@ -1,0 +1,39 @@
+file: remediations.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構成本估計）
+consumed_by: Day 25 處置模型、Day 26 候選措施、Day 27 ROI
+description: >
+  一列一個候選措施。以 (asset, cve) 為鍵——scanner.csv 沒有 finding_id，
+  而 (資產, 漏洞) 是全專案一致的自然鍵（見 scoring/calibration.key_of）。
+  同一筆 finding 可以有多個候選措施，這正是 Day 26 要比較的東西。
+columns:
+  - name: remediation_id
+    required: true
+    blank_ok: false
+  - name: asset
+    required: true
+    blank_ok: false
+  - name: cve
+    required: true
+    blank_ok: false
+  - name: action
+    required: true
+    blank_ok: false
+    domain: [patch, isolate, disable_service, config_change, compensating_control]
+    note: 修補不是唯一選項——這個值域本身就是 Day 25 的論點。
+  - name: effort_hours
+    required: true
+    blank_ok: false
+    range: [0, 200]
+    note: 虛構估計。不知道成本就不能算 ROI，所以這一欄不允許空白。
+  - name: downtime_minutes
+    required: true
+    blank_ok: false
+    range: [0, 1440]
+  - name: compatibility
+    required: true
+    blank_ok: false
+    note: none 代表無已知相容性限制；其餘為限制描述，Day 26 要能解釋為什麼不選某個措施。
+  - name: notes
+    required: true
+    blank_ok: false

@@ -1,0 +1,24 @@
+file: identity_edges.csv
+version: "1.0.0"
+produced_by: scripts/build_northstar.py（虛構帳號關係）
+consumed_by: Day 21 身分邊、Day 22 路徑分析
+description: >
+  一列一條「某個帳號可以從 A 動到 B」的權限關係。與網路連線分開記錄：
+  網路可達不代表權限夠，權限夠也不代表網路到得了，兩者都成立才構成一步。
+columns:
+  - name: account
+    required: true
+    blank_ok: false
+    note: 帳號識別；同一帳號可以出現在多列。
+  - name: source
+    required: true
+    blank_ok: false
+  - name: target
+    required: true
+    blank_ok: false
+  - name: privilege
+    required: true
+    blank_ok: false
+    domain: [db_read_only, db_read_write, local_service, local_admin,
+             domain_admin, interactive_logon]
+    note: 取得的權限等級，決定後續還能往哪走。
