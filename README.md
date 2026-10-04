@@ -14,7 +14,7 @@
 | 版本 | `0.2.0`（已發行 `v0.2.0-data`）；`v0.3.0-scoring` 門檻已通過（Day 18） |
 | 進度 | Day 1–18 已發表；畫攻擊路徑階段（Day 19–24）開工 |
 | Decision Rule | `config/risk_rules.yaml` 版本 `0.3.0` |
-| 規模 | 341 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
+| 規模 | 355 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
 | 最近修訂 | 2026-10-03 |
 
 施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ **做評分（11–18）** → 畫攻擊路徑（19–24）→ 給修補建議（25–30）
@@ -116,7 +116,7 @@ uv run cve2action rank \
 src/cve2action/
 ├── collectors/      NVD、EPSS、KEV——一律落成帶日期的快照，可離線重跑
 ├── normalization/   cvss、exposure、business、threat、control——把事實變成可進公式的值
-├── attack_graph/    resolve（觀測→資產）、model（節點與邊）、build
+├── attack_graph/    resolve（觀測→資產）、model、build、reachability（依據判定）、paths
 ├── engine.py        評分與排序
 ├── rules.py         載入並驗證 risk_rules.yaml，違反即拒載
 ├── io.py / models.py / cli.py
