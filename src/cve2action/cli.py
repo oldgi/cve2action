@@ -11,7 +11,13 @@ from datetime import date
 from pathlib import Path
 
 from . import __version__
-from .attack_graph import build_graph, build_inventory, resolve
+from .attack_graph import (
+    annotate,
+    build_graph,
+    build_inventory,
+    egress_governance,
+    resolve,
+)
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
 from .collectors.epss import EpssError, get_epss_many
 from .collectors.epss import load_snapshots as load_epss_snapshots
@@ -161,6 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("--identity", "帳號權限關係 CSV"),
     ):
         graph_parser.add_argument(name, required=True, help=helptext)
+    graph_parser.add_argument("--policies", help="網路政策 CSV；給了才會判定每條連線的依據")
     graph_parser.add_argument("--out", help="輸出圖的 JSON 路徑；不給就只印統計")
     graph_parser.add_argument("--resolve", metavar="OBSERVATION",
                               help="解析單一 IP／hostname／MAC 屬於哪一台資產")
@@ -300,6 +307,20 @@ def _run_graph(args) -> int:
         print(f"排除 {len(graph.excluded)} 條邊（理由保留，Day 22 要用）：")
         for item in graph.excluded:
             print(f"  {item.source} -> {item.target} [{item.kind}] {item.reason}")
+    if args.policies:
+        policies = _read_rows(args.policies)
+        zones = {a["asset_id"]: a["zone"] for a in assets}
+        counts = annotate(graph, _read_rows(args.network), policies, zones)
+        print("可達性依據：" + "、".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        for edge in graph.edges:
+            if edge.attrs.get("basis") in ("DRIFT", "UNGOVERNED"):
+                print(f"  [{edge.attrs['basis']}] {edge.source} -> {edge.target}"
+                      f"　{edge.attrs.get('basis_detail', '')}")
+        outbound = {z: egress_governance(z, policies) for z in sorted(set(zones.values()))}
+        loose = [z for z, b in outbound.items() if not b.governed]
+        if loose:
+            print(f"出向未受政策管轄的 zone：{'、'.join(loose)}"
+                  "——回程通道不得視為已阻擋")
     if args.out:
         Path(args.out).write_text(graph.to_json(), encoding="utf-8")
         print(f"-> {args.out}")
