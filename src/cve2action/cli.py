@@ -16,6 +16,7 @@ from .attack_graph import (
     build_graph,
     build_inventory,
     egress_governance,
+    identity_annotate,
     resolve,
 )
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
@@ -168,6 +169,9 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         graph_parser.add_argument(name, required=True, help=helptext)
     graph_parser.add_argument("--policies", help="網路政策 CSV；給了才會判定每條連線的依據")
+    graph_parser.add_argument("--findings",
+                              help="弱掃結果 CSV；與 --snapshots 一起給才判定身分前提")
+    graph_parser.add_argument("--snapshots", help="NVD 快照目錄（讀 CVSS 向量判斷本機提權）")
     graph_parser.add_argument("--out", help="輸出圖的 JSON 路徑；不給就只印統計")
     graph_parser.add_argument("--resolve", metavar="OBSERVATION",
                               help="解析單一 IP／hostname／MAC 屬於哪一台資產")
@@ -321,6 +325,19 @@ def _run_graph(args) -> int:
         if loose:
             print(f"出向未受政策管轄的 zone：{'、'.join(loose)}"
                   "——回程通道不得視為已阻擋")
+    if args.findings and args.snapshots:
+        vectors = {}
+        for cve, record in load_snapshots(args.snapshots).items():
+            chosen = record.cvss.preferred(("3.1", "4.0"))
+            if chosen is not None:
+                vectors[cve.upper()] = chosen.vector
+        counts = identity_annotate(graph, _read_rows(args.identity),
+                                   _read_rows(args.services), _read_rows(args.findings),
+                                   vectors)
+        print("身分邊前提：" + "、".join(f"{k} {v}" for k, v in sorted(counts.items())))
+        for edge in graph.edges:
+            if edge.attrs.get("precondition") == "BLOCKED":
+                print(f"  [BLOCKED] -> {edge.target}　{edge.attrs['precondition_reason']}")
     if args.out:
         Path(args.out).write_text(graph.to_json(), encoding="utf-8")
         print(f"-> {args.out}")

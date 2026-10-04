@@ -1,5 +1,5 @@
 file: identity_edges.csv
-version: "1.0.0"
+version: "1.1.0"
 produced_by: scripts/build_northstar.py（虛構帳號關係）
 consumed_by: Day 21 身分邊、Day 22 路徑分析
 description: >
@@ -22,3 +22,16 @@ columns:
     domain: [db_read_only, db_read_write, local_service, local_admin,
              domain_admin, interactive_logon]
     note: 取得的權限等級，決定後續還能往哪走。
+  - name: credential_source
+    required: true
+    blank_ok: false
+    domain: [config_file, memory, agent_token, sealed_credential, interactive_only]
+    note: >
+      憑證放在來源機器的哪裡。`sealed_credential` 代表它**不在機器上**（離線保管），
+      權限再高也取不到——這一欄存在的理由就是這個，否則只是裝飾。
+  - name: requires_privilege
+    required: true
+    blank_ok: false
+    domain: [db_read_only, db_read_write, local_service, interactive_logon,
+             local_admin, domain_admin]
+    note: 在來源端要有什麼權限才拿得到這組憑證。前提是記錄的事實，不是從分數推出來的。

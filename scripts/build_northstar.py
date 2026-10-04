@@ -31,11 +31,13 @@ ASSET_HEADER = ["asset_id", "hostname", "zone", "environment", "business_role",
 BUSINESS_HEADER = ["asset_id", "data_class", "rto_hours", "customer_facing", "notes"]
 CONTROL_HEADER = ["asset_id", "control_type", "effectiveness", "evidence", "verified_at"]
 NETWORK_HEADER = ["source", "target", "port", "protocol", "allowed"]
-IDENTITY_HEADER = ["account", "source", "target", "privilege"]
+IDENTITY_HEADER = ["account", "source", "target", "privilege",
+                   "credential_source", "requires_privilege"]
 REMEDIATION_HEADER = ["remediation_id", "asset", "cve", "action", "effort_hours",
                       "downtime_minutes", "compatibility", "notes"]
 INTERFACE_HEADER = ["interface_id", "asset_id", "ip", "hostname", "mac", "interface_type"]
-SERVICE_HEADER = ["asset_id", "port", "protocol", "service", "version", "state"]
+SERVICE_HEADER = ["asset_id", "port", "protocol", "service", "version", "state",
+                  "runs_as"]
 POLICY_HEADER = ["policy_id", "source_scope", "destination", "port", "action", "verified_at"]
 CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
                   "business_criticality", "reachability_source", "control_source",
@@ -139,16 +141,16 @@ NETWORK_EDGES = [
 # 藍圖 §8.2：10 條帳號或權限關係。break_glass 那一條對應 controls.csv 裡
 # NS-JUMP-01 的 mfa/PARTIAL 證據「session recording gaps on break-glass account」。
 IDENTITY_EDGES = [
-    ("svc_order", "NS-APP-ORDER-01", "NS-DB-CUSTOMER-01", "db_read_write"),
-    ("svc_billing", "NS-APP-BILLING-01", "NS-DB-BILLING-01", "db_read_write"),
-    ("svc_report", "NS-APP-REPORT-01", "NS-DB-CUSTOMER-01", "db_read_only"),
-    ("svc_backup", "NS-BACKUP-01", "NS-DB-CUSTOMER-01", "db_read_only"),
-    ("svc_monitor", "NS-MON-01", "NS-APP-ORDER-01", "local_service"),
-    ("adm_platform", "NS-JUMP-01", "NS-DB-CUSTOMER-01", "local_admin"),
-    ("adm_platform", "NS-JUMP-01", "NS-DB-BILLING-01", "local_admin"),
-    ("adm_domain", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin"),
-    ("break_glass", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin"),
-    ("ops_desktop", "NS-OPS-WS-07", "NS-JUMP-01", "interactive_logon"),
+    ("svc_order", "NS-APP-ORDER-01", "NS-DB-CUSTOMER-01", "db_read_write", "config_file", "local_service"),
+    ("svc_billing", "NS-APP-BILLING-01", "NS-DB-BILLING-01", "db_read_write", "config_file", "local_service"),
+    ("svc_report", "NS-APP-REPORT-01", "NS-DB-CUSTOMER-01", "db_read_only", "config_file", "local_service"),
+    ("svc_backup", "NS-BACKUP-01", "NS-DB-CUSTOMER-01", "db_read_only", "agent_token", "local_admin"),
+    ("svc_monitor", "NS-MON-01", "NS-APP-ORDER-01", "local_service", "config_file", "local_service"),
+    ("adm_platform", "NS-JUMP-01", "NS-DB-CUSTOMER-01", "local_admin", "memory", "local_admin"),
+    ("adm_platform", "NS-JUMP-01", "NS-DB-BILLING-01", "local_admin", "memory", "local_admin"),
+    ("adm_domain", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin", "memory", "local_admin"),
+    ("break_glass", "NS-JUMP-01", "NS-AD-DC-01", "domain_admin", "sealed_credential", "interactive_logon"),
+    ("ops_desktop", "NS-OPS-WS-07", "NS-JUMP-01", "interactive_logon", "interactive_only", "interactive_logon"),
 ]
 
 # 藍圖 §8.2：15 種候選修補措施。以 (asset, cve) 為鍵——scanner.csv 沒有 finding_id，
@@ -214,34 +216,34 @@ ASSET_INTERFACES = [
 # 否則那條邊通往空氣——有測試強制這件事。
 # state=filtered 代表服務在、但被主機防火牆擋住；路徑分析不得把它當成走得通。
 SERVICES = [
-    ("NS-EDGE-RTR-01", 443, "tcp", "ios-xe-webui", "17.6.1", "listening"),
-    ("NS-WEB-PORTAL-01", 443, "tcp", "apache-httpd", "2.4.49", "listening"),
-    ("NS-WEB-PORTAL-01", 80, "tcp", "apache-httpd", "2.4.49", "closed"),
-    ("NS-WEB-PORTAL-02", 443, "tcp", "apache-httpd", "2.4.49", "listening"),
-    ("NS-WEB-PORTAL-02", 80, "tcp", "apache-httpd", "2.4.49", "closed"),
-    ("NS-API-GW-01", 443, "tcp", "nginx", "1.20.1", "listening"),
-    ("NS-MAIL-GW-01", 443, "tcp", "exchange-owa", "15.2.792", "listening"),
-    ("NS-VPN-GW-01", 443, "tcp", "fortios-ssl-vpn", "6.0.4", "listening"),
-    ("NS-APP-ORDER-01", 8080, "tcp", "tomcat", "9.0.30", "listening"),
-    ("NS-APP-ORDER-01", 22, "tcp", "openssh", "8.2p1", "listening"),
-    ("NS-APP-ORDER-01", 9100, "tcp", "node-exporter", "1.3.1", "listening"),
-    ("NS-APP-BILLING-01", 8443, "tcp", "moveit-transfer", "15.0.1", "listening"),
-    ("NS-APP-INTRANET-01", 8090, "tcp", "confluence", "8.5.1", "listening"),
-    ("NS-APP-REPORT-01", 8009, "tcp", "tomcat-ajp", "9.0.30", "listening"),
-    ("NS-DB-CUSTOMER-01", 5432, "tcp", "postgresql", "14.5", "listening"),
-    ("NS-DB-BILLING-01", 5432, "tcp", "postgresql", "14.5", "listening"),
-    ("NS-BACKUP-01", 873, "tcp", "rsync", "3.2.3", "listening"),
-    ("NS-BACKUP-01", 445, "tcp", "smb", "1.0", "filtered"),
-    ("NS-FILE-SRV-01", 445, "tcp", "smb", "1.0", "listening"),
-    ("NS-FILE-SRV-01", 22, "tcp", "openssh", "7.4p1", "listening"),
-    ("NS-AD-DC-01", 389, "tcp", "ldap", "2019", "listening"),
-    ("NS-AD-DC-01", 3389, "tcp", "rdp", "10.0", "listening"),
-    ("NS-AD-DC-01", 445, "tcp", "netlogon", "2019", "listening"),
-    ("NS-JUMP-01", 3389, "tcp", "rdp", "10.0", "listening"),
-    ("NS-MON-01", 3000, "tcp", "grafana", "9.1.0", "listening"),
-    ("NS-OPS-WS-07", 445, "tcp", "smb", "3.1.1", "filtered"),
-    ("NS-PLC-DC-ENV", 44818, "tcp", "controllogix", "32.011", "listening"),
-    ("NS-LAB-CONFLUENCE-01", 8090, "tcp", "confluence", "7.13.0", "listening"),
+    ("NS-EDGE-RTR-01", 443, "tcp", "ios-xe-webui", "17.6.1", "listening", "local_admin"),
+    ("NS-WEB-PORTAL-01", 443, "tcp", "apache-httpd", "2.4.49", "listening", "local_service"),
+    ("NS-WEB-PORTAL-01", 80, "tcp", "apache-httpd", "2.4.49", "closed", "local_service"),
+    ("NS-WEB-PORTAL-02", 443, "tcp", "apache-httpd", "2.4.49", "listening", "local_service"),
+    ("NS-WEB-PORTAL-02", 80, "tcp", "apache-httpd", "2.4.49", "closed", "local_service"),
+    ("NS-API-GW-01", 443, "tcp", "nginx", "1.20.1", "listening", "local_service"),
+    ("NS-MAIL-GW-01", 443, "tcp", "exchange-owa", "15.2.792", "listening", "local_service"),
+    ("NS-VPN-GW-01", 443, "tcp", "fortios-ssl-vpn", "6.0.4", "listening", "local_admin"),
+    ("NS-APP-ORDER-01", 8080, "tcp", "tomcat", "9.0.30", "listening", "local_service"),
+    ("NS-APP-ORDER-01", 22, "tcp", "openssh", "8.2p1", "listening", "interactive_logon"),
+    ("NS-APP-ORDER-01", 9100, "tcp", "node-exporter", "1.3.1", "listening", "local_service"),
+    ("NS-APP-BILLING-01", 8443, "tcp", "moveit-transfer", "15.0.1", "listening", "local_service"),
+    ("NS-APP-INTRANET-01", 8090, "tcp", "confluence", "8.5.1", "listening", "local_service"),
+    ("NS-APP-REPORT-01", 8009, "tcp", "tomcat-ajp", "9.0.30", "listening", "local_service"),
+    ("NS-DB-CUSTOMER-01", 5432, "tcp", "postgresql", "14.5", "listening", "local_service"),
+    ("NS-DB-BILLING-01", 5432, "tcp", "postgresql", "14.5", "listening", "local_service"),
+    ("NS-BACKUP-01", 873, "tcp", "rsync", "3.2.3", "listening", "local_service"),
+    ("NS-BACKUP-01", 445, "tcp", "smb", "1.0", "filtered", "local_service"),
+    ("NS-FILE-SRV-01", 445, "tcp", "smb", "1.0", "listening", "local_service"),
+    ("NS-FILE-SRV-01", 22, "tcp", "openssh", "7.4p1", "listening", "interactive_logon"),
+    ("NS-AD-DC-01", 389, "tcp", "ldap", "2019", "listening", "local_service"),
+    ("NS-AD-DC-01", 3389, "tcp", "rdp", "10.0", "listening", "local_admin"),
+    ("NS-AD-DC-01", 445, "tcp", "netlogon", "2019", "listening", "local_service"),
+    ("NS-JUMP-01", 3389, "tcp", "rdp", "10.0", "listening", "local_admin"),
+    ("NS-MON-01", 3000, "tcp", "grafana", "9.1.0", "listening", "local_service"),
+    ("NS-OPS-WS-07", 445, "tcp", "smb", "3.1.1", "filtered", "local_service"),
+    ("NS-PLC-DC-ENV", 44818, "tcp", "controllogix", "32.011", "listening", "local_admin"),
+    ("NS-LAB-CONFLUENCE-01", 8090, "tcp", "confluence", "7.13.0", "listening", "local_service"),
 ]
 
 # ACL 與正向列表（Day 20）。policy 以 zone 為範圍，network_edges 是實際觀測到的連線。

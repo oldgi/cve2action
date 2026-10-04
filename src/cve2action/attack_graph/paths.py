@@ -65,8 +65,12 @@ class Path:
         return tuple((h.source, h.target) for h in self.hops)
 
 
-def _steps(graph: AttackGraph, asset: str) -> list[Hop]:
-    """從一台資產（或 internet）可以走到哪裡。"""
+def _steps(graph: AttackGraph, asset: str, gated: bool = True) -> list[Hop]:
+    """從一台資產（或 internet）可以走到哪裡。
+
+    `gated` 為真時，前提判定為 BLOCKED 的身分邊不算一步（Day 21）。
+    **UNPROVEN 仍然算**——不能證明走不通，就得當它走得通。
+    """
     found: list[Hop] = []
     for edge in graph.out_edges(asset, REACHES):
         service = graph.nodes[edge.target]
@@ -75,6 +79,8 @@ def _steps(graph: AttackGraph, asset: str) -> list[Hop]:
                          detail=service.label, service_node=service.id))
     for use in graph.out_edges(asset, USES):
         for grant in graph.out_edges(use.target, GRANTS):
+            if gated and grant.attrs.get("precondition") == "BLOCKED":
+                continue
             found.append(Hop(IDENTITY, asset, grant.target,
                              via=graph.nodes[use.target].label,
                              detail=grant.attrs.get("privilege", "")))
@@ -82,7 +88,7 @@ def _steps(graph: AttackGraph, asset: str) -> list[Hop]:
 
 
 def find_paths(graph: AttackGraph, target: str, source: str = INTERNET_ID,
-               max_hops: int = 8) -> list[Path]:
+               max_hops: int = 8, gated: bool = True) -> list[Path]:
     """列出 source 到 target 的所有簡單路徑（不重複造訪同一台）。
 
     依跳數由短到長排序。長度相同時依沿途資產名稱排序——**排序必須是決定性的**，
@@ -96,7 +102,7 @@ def find_paths(graph: AttackGraph, target: str, source: str = INTERNET_ID,
         if current == target and hops:
             results.append(Path(hops, source))
             return
-        for hop in _steps(graph, current):
+        for hop in _steps(graph, current, gated):
             if hop.target in seen:
                 continue
             walk(hop.target, seen + (hop.target,), hops + (hop,))
