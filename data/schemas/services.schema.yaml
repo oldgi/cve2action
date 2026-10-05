@@ -1,5 +1,5 @@
 file: services.csv
-version: "1.0.0"
+version: "1.1.0"
 produced_by: scripts/build_northstar.py（虛構服務清單）
 consumed_by: Day 20 可達性引擎（Port 與方向）、Day 22 路徑分析
 description: >
@@ -31,3 +31,10 @@ columns:
     note: >
       只有 listening 構成攻擊面。filtered 代表服務在、但被擋住；
       closed 代表沒在聽。兩者都不得被當成可達的一步。
+  - name: runs_as
+    required: true
+    blank_ok: false
+    domain: [local_service, interactive_logon, local_admin]
+    note: >
+      攻下這個服務會取得什麼身分。**CVSS 給不了這個**——`PR` 說的是「需要什麼權限
+      才能打」，不是「打完拿到什麼權限」，兩者方向相反。所以它必須被記錄。

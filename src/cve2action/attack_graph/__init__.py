@@ -5,6 +5,9 @@
 """
 
 from .build import build_graph
+from .identity import BLOCKED, SATISFIED, UNPROVEN, Obtainable, Precondition, privilege_obtainable
+from .identity import annotate as identity_annotate
+from .identity import check as identity_check
 from .model import (
     ACCOUNT,
     ASSET,
@@ -43,4 +46,6 @@ __all__ = [
     "find_paths", "render_path", "render_summary", "shared_hops", "Path", "PathContext",
     "classify", "annotate", "egress_governance", "Basis",
     "BY_POLICY", "INTRA_ZONE", "DRIFT", "UNGOVERNED",
+    "identity_annotate", "identity_check", "privilege_obtainable",
+    "Obtainable", "Precondition", "SATISFIED", "BLOCKED", "UNPROVEN",
 ]
