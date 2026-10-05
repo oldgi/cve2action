@@ -14,6 +14,7 @@ from . import __version__
 from .attack_graph import (
     ASSET,
     PathContext,
+    analyse,
     annotate,
     build_graph,
     build_inventory,
@@ -22,6 +23,7 @@ from .attack_graph import (
     egress_governance,
     find_paths,
     identity_annotate,
+    render_choke,
     render_coverage,
     render_path,
     render_summary,
@@ -220,6 +222,13 @@ def build_parser() -> argparse.ArgumentParser:
     path_parser.add_argument("--snapshots", help="NVD 快照目錄")
     path_parser.add_argument("--to", metavar="ASSET", help="目標資產；不給就看整份覆蓋狀況")
     path_parser.add_argument("--all", action="store_true", help="列出全部路徑而非只有最短那條")
+    path_parser.add_argument(
+        "--choke", action="store_true",
+        help="分析通往全部 Crown Jewel 的共同瓶頸：出現頻率與反事實切斷數並列，"
+             "並算出最小切割集合（Day 24）")
+    path_parser.add_argument(
+        "--without", action="append", default=[], metavar="ASSET",
+        help="把這台當成不存在再搜一次，回答「修掉它還剩幾條」；可重複")
 
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
@@ -446,22 +455,46 @@ def _run_path(args) -> int:
         for row in _read_rows(args.findings):
             findings.setdefault(row["asset"], []).append(row["cve"])
     jewels = frozenset(n.id for n in graph.crown_jewels)
+    without = frozenset(args.without or ())
+
+    if args.choke:
+        print(render_choke(analyse(graph)))
+        return 0
 
     if not args.to:
-        reachable = {n.id for n in graph.of_kind(ASSET) if find_paths(graph, n.id)}
+        reachable = {n.id for n in graph.of_kind(ASSET)
+                     if find_paths(graph, n.id, without=without)}
         print(render_coverage(coverage(graph, reachable)))
         return 0
 
-    paths = find_paths(graph, args.to)
+    paths = find_paths(graph, args.to, without=without)
     if not paths:
+        if without:
+            print(f"移除 {'、'.join(sorted(without))} 之後沒有路徑通往 {args.to}。"
+                  "注意：這是「這組連線斷了」，不是「它從此安全」。")
+            return 0
         reachable = {n.id for n in graph.of_kind(ASSET) if find_paths(graph, n.id)}
         print(diagnose(graph, args.to, reachable))
         return 0
 
+    if without:
+        baseline = len(find_paths(graph, args.to))
+        print(f"移除 {'、'.join(sorted(without))}：{baseline} 條剩 {len(paths)} 條"
+              f"（切斷 {baseline - len(paths)} 條）")
     print(render_summary(paths, graph))
     print()
+    privileges = {}
+    if args.findings and args.snapshots:
+        vectors = {}
+        for cve, record in load_snapshots(args.snapshots).items():
+            chosen = record.cvss.preferred(("3.1", "4.0"))
+            if chosen is not None:
+                vectors[cve.upper()] = chosen.vector
+        services, scan = _read_rows(args.services), _read_rows(args.findings)
+        privileges = {node.id: privilege_obtainable(node.id, services, scan, vectors)
+                      for node in graph.of_kind(ASSET)}
     context = PathContext(findings=findings, crown_jewels=jewels,
-                          siblings=len(paths) - 1)
+                          siblings=len(paths) - 1, privileges=privileges)
     for path in (paths if args.all else paths[:1]):
         print(render_path(path, graph, context))
         print()

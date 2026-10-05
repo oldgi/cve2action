@@ -94,7 +94,7 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 > | 4 | 補上 CVSS、EPSS、KEV | Day 7–10 | 已完成 |
 > | 5 | 同時呈現 CVSS 排名與本專案排名 | **Day 28／29** | 盤點後補排 |
 > | 6 | 每個分數說明來源、加減分與資料缺口 | Day 16 | 已完成 |
-> | 7 | 找出至少一條 Internet → Crown Jewel 路徑 | Day 22 | 資料已備妥 |
+> | 7 | 找出至少一條 Internet → Crown Jewel 路徑 | Day 22 | 已完成（30 條，最短 2 跳；Day 24 補上權限呈現） |
 > | 8 | 比較 Patch、隔離與關閉連線 | Day 26 | — |
 > | 9 | 重算措施後的分數及剩餘路徑 | Day 27 | — |
 > | 10 | 重複觀測只形成一項修補工作 | **Day 19** ＋ Day 26 | 盤點後補排 |
@@ -329,7 +329,7 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 | 21 | 帳號與權限如何讓攻擊者橫向移動？ | Identity Edges | 權限前置條件明確 |
 | 22 | 從 Internet 找到最短入侵路徑 | Path Finder | 找到並呈現一條路徑 |
 | 23 | 不是路徑愈短就一定愈危險 | Attack Path Score ＋ **公式形式決策** | ✅ 路徑條件以第五項 `A` 進入分數（§9.3 四項）；兩種形式都實作並各跑一次，**採用加權相加**（tau 相同 0.6、幾何平均在 `attributable` 上 0/37），[ADR-day-23](docs/decisions/ADR-day-23-formula-form.md)。同時修掉門檻自己的三個缺陷：`explainable` 從不檢查分解重建、缺少 `attributable`、`revisit_on` 不是可檢查的日期 |
-| 24 | 找出通往 Crown Jewel 的共同瓶頸 | Choke Point | 找出共用高影響節點 |
+| 24 | 找出通往 Crown Jewel 的共同瓶頸 | Choke Point | ✅ 瓶頸改以**反事實**定義（移除後重算），不用出現頻率——兩者第一名不同。`NS-JUMP-01` 出現在四個 Crown Jewel 的每一個最小切割集合裡；單點瓶頸不存在（各需 ≥2 台）；切斷數不可相加。路徑呈現補上權限，§16 四項齊備。[ADR-day-24](docs/decisions/ADR-day-24-choke-point.md) |
 | 25 | 修漏洞不是唯一選項 | Remediation Model ＋ **適用性閘門** | 支援 Patch 與補償控制；**處置結果新增 `NOT_APPLICABLE` 與 `REVIEW_REQUIRED` 兩種第一級結論，由版本證據支撐——最便宜的處置是證明它根本不適用**（§9.0 閘門 2、成功標準 #3；需 `version_evidence.csv`）|
 | 26 | Patch、隔離、關閉服務，哪一個先做？ | Candidate Engine | 每項措施有成本與限制 |
 | 27 | 用最少變更切斷最多攻擊路徑 | Remediation ROI | 比較投入與降低幅度 |
@@ -550,6 +550,9 @@ ADR 必須包含背景、決策、理由、替代方案與後果。
 - Day 10：保留未知值與欄位來源，不能把空白或字串 false 當成已核准／可達。
 - Day 18：尚未核准的暫緩不得自動放行；不能因不知道修補成本就填成零。
 - Day 24：共用跳板狀態改變會使相關決策失效；不能把 MFA 登入關係畫成已成功入侵。
+  **已落實**：`NS-JUMP-01` 出現在四個 Crown Jewel 的每一個最小切割集合裡，
+  所以它一變，四個結論同時失效——這就是把「共同瓶頸」定義成「每個解法都少不了的節點」
+  而不是「被最多路徑共用的節點」的直接理由（[ADR-day-24](docs/decisions/ADR-day-24-choke-point.md)）。
 - Day 30：Demo 展示「B 緩解但修補未結案」「A 暫緩待審」「證據過期重評」三種狀態，並能回顧決策依據。
 
 Day 2 CSV schema 0.2.0 為靜態案例契約，尚不是全系統正式 schema。既有公式與 API 依此逐步擴充，避免為兩筆範例提前建置完整工單系統。

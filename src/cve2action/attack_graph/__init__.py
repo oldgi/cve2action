@@ -5,6 +5,8 @@
 """
 
 from .build import build_graph
+from .choke import Choke, ChokeReport, Cut, analyse, combined_cut
+from .choke import render as render_choke
 from .diagnose import (
     BLOCKED_BY_POLICY,
     EXCLUDED,
@@ -62,4 +64,5 @@ __all__ = [
     "Obtainable", "Precondition", "SATISFIED", "BLOCKED", "UNPROVEN",
     "diagnose", "coverage", "render_coverage", "NoPath", "Coverage",
     "NO_INBOUND", "SOURCE_UNREACHABLE", "BLOCKED_BY_POLICY", "EXCLUDED", "REACHABLE",
+    "analyse", "render_choke", "combined_cut", "Choke", "ChokeReport", "Cut",
 ]
