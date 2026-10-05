@@ -12,11 +12,19 @@ from pathlib import Path
 
 from . import __version__
 from .attack_graph import (
+    ASSET,
+    PathContext,
     annotate,
     build_graph,
     build_inventory,
+    coverage,
+    diagnose,
     egress_governance,
+    find_paths,
     identity_annotate,
+    render_coverage,
+    render_path,
+    render_summary,
     resolve,
 )
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
@@ -175,6 +183,23 @@ def build_parser() -> argparse.ArgumentParser:
     graph_parser.add_argument("--out", help="輸出圖的 JSON 路徑；不給就只印統計")
     graph_parser.add_argument("--resolve", metavar="OBSERVATION",
                               help="解析單一 IP／hostname／MAC 屬於哪一台資產")
+
+    path_parser = subparsers.add_parser(
+        "path", help="找出並呈現通往某台資產的路徑；查無路徑時說得出為什麼（Day 22）"
+    )
+    for name, helptext in (
+        ("--assets", "資產清冊 CSV"),
+        ("--interfaces", "網路介面 CSV"),
+        ("--services", "服務清單 CSV"),
+        ("--network", "網路連線 CSV"),
+        ("--identity", "帳號權限關係 CSV"),
+    ):
+        path_parser.add_argument(name, required=True, help=helptext)
+    path_parser.add_argument("--policies", help="網路政策 CSV")
+    path_parser.add_argument("--findings", help="弱掃結果 CSV")
+    path_parser.add_argument("--snapshots", help="NVD 快照目錄")
+    path_parser.add_argument("--to", metavar="ASSET", help="目標資產；不給就看整份覆蓋狀況")
+    path_parser.add_argument("--all", action="store_true", help="列出全部路徑而非只有最短那條")
 
     derive_parser = subparsers.add_parser(
         "derive-context", help="從 assets.csv + controls.csv 推導 asset_context.csv"
@@ -344,6 +369,59 @@ def _run_graph(args) -> int:
     return 0
 
 
+def _build_annotated_graph(args):
+    """`graph` 與 `path` 共用的建圖流程：建圖、標可達性依據、標身分前提。"""
+    assets = _read_rows(args.assets)
+    graph = build_graph(assets, _read_rows(args.interfaces), _read_rows(args.services),
+                        _read_rows(args.network), _read_rows(args.identity))
+    if args.policies:
+        annotate(graph, _read_rows(args.network), _read_rows(args.policies),
+                 {a["asset_id"]: a["zone"] for a in assets})
+    if args.findings and args.snapshots:
+        vectors = {}
+        for cve, record in load_snapshots(args.snapshots).items():
+            chosen = record.cvss.preferred(("3.1", "4.0"))
+            if chosen is not None:
+                vectors[cve.upper()] = chosen.vector
+        identity_annotate(graph, _read_rows(args.identity), _read_rows(args.services),
+                          _read_rows(args.findings), vectors)
+    return graph, assets
+
+
+def _run_path(args) -> int:
+    try:
+        graph, _assets = _build_annotated_graph(args)
+    except (ValueError, KeyError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    findings: dict[str, list[str]] = {}
+    if args.findings:
+        for row in _read_rows(args.findings):
+            findings.setdefault(row["asset"], []).append(row["cve"])
+    jewels = frozenset(n.id for n in graph.crown_jewels)
+
+    if not args.to:
+        reachable = {n.id for n in graph.of_kind(ASSET) if find_paths(graph, n.id)}
+        print(render_coverage(coverage(graph, reachable)))
+        return 0
+
+    paths = find_paths(graph, args.to)
+    if not paths:
+        reachable = {n.id for n in graph.of_kind(ASSET) if find_paths(graph, n.id)}
+        print(diagnose(graph, args.to, reachable))
+        return 0
+
+    print(render_summary(paths, graph))
+    print()
+    context = PathContext(findings=findings, crown_jewels=jewels,
+                          siblings=len(paths) - 1)
+    for path in (paths if args.all else paths[:1]):
+        print(render_path(path, graph, context))
+        print()
+    return 0
+
+
 def _run_derive_context(args) -> int:
     try:
         rules = load_rules(args.rules)
@@ -503,6 +581,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_acceptance(args)
     if args.command == "graph":
         return _run_graph(args)
+    if args.command == "path":
+        return _run_path(args)
     try:
         rules = load_rules(args.rules)
         findings = read_scanner(args.scanner)
