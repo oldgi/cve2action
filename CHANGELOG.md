@@ -6,6 +6,10 @@
 
 ### Added
 
+- 新增 `src/cve2action/scoring/path_score.py`：藍圖 §9.3 的攻擊路徑分數 `A`，四項（可達性 0.40、可得權限 0.25、通往 Crown Jewel 0.25、跳數倒數 0.10）全部從 Day 19–22 建好的圖算出，不新增人工輸入。兩個刻意不補零的地方：查無路徑時可達性取下限 **0.05 而非 0**（Day 22 已證明那六台查無路徑沒有一台是被擋住的，給 0 等於宣告「證明不可達」），權限無法證明時整項移除、權重退回可達性（不猜中間值，與 Day 14 缺威脅資料同一招）。`A` 以第五項進入公式，權重改為 `0.28/0.12/0.20/0.20/0.20`；沒有攻擊圖資料時該項整個移除、權重退回 `exposure`。11 個測試。
+- `risk_rules.yaml` 新增 `form`，支援 `additive` 與 `geometric` 兩種合成形式，兩者都已實作並各跑一次（藍圖 §10 Day 23 的要求）。**採用 `additive`**，依據是 `acceptance` 的門檻而非論述：兩種形式的 Kendall tau-b 與分歧清單完全相同（0.6、兩組），幾何平均在 `discrimination`（0.9211 對 0.8421）與 `range_coverage`（0.578 對 0.443）上勝出，但在新增的 `attributable` 上 0/37 對 37/37——幾何平均下總分不是各項之和，`gap_to()` 答不出「為什麼它排在我前面」，而那是 Day 16 建 `Explanation` 的全部理由。幾何平均保留於 `config/risk_rules.geometric.yaml`（CI 不跑、測試跑）：否決一個選項不等於把它刪掉。17 個測試，ADR-day-23 記錄依據與重新打開這個決定的三個條件。
+- 評分門檻新增第九條 `attributable`：每組相鄰名次都要能逐項說明誰贏在哪一項，且逐項差額加得回總分差。Day 16 把 `gap_to` 做成可交付成果、Day 17 的分歧判決直接引用它的輸出，而 Day 18 定八條門檻時沒有一條看守它——這個專案最核心的對外承諾，是唯一沒有門檻的一條。
+- `acceptance` 新增 `--today`：判斷豁免是否到期的日期，與 `--as-of`（資料基準日）分開。
 - 新增 `src/cve2action/scoring/` 套件與 `scoring/explain.py`：`Explanation` 成為計分的第一級產物，`ranked_result.csv` 的列、`reason` 欄、JSON 與人讀說明全是它的投影——與快照 `raw`／`extracted` 同一條紀律，字串不可能再與數字不一致。每個 `Factor` 帶值、權重、貢獻、佔比、原始輸入與來源；`gap_to()` 把兩筆的分差拆成逐項貢獻差，加總等於總分差。新增 CLI `cve2action explain`（`--cve`／`--asset`／`--top`／`--json`，自動附上與前一名的差距）與 15 個測試，其中一個會把每一列 `reason` 裡的數字全部抓出來逐一驗證它存在於 Explanation 中。ADR-day-16 記錄規則。
 - 新增 `data/schemas/`：六份 CSV 的資料契約（欄位、值域、缺值語意、誰寫誰讀），以 `scripts/validate_schemas.py` 強制驗證並納入 CI。附四個反向測試證明契約抓得到違規——欄位值超出值域、該填未填、多出未宣告欄位、少掉必要欄位。
 - CI 新增三個步驟守住「文件寫的完整流程真的跑得起來」：Northstar 的 `derive-context`、含快照與威脅情報與控制的全鏈 `rank`，以及 `git diff --exit-code` 確認離線重跑與版控結果完全相同。
@@ -22,12 +26,22 @@
 
 ### Fixed
 
+- **`revisit_on` 寫的是 `Day 20` 這種字串，等於永久豁免。** Day 18 的豁免機制要求寫下重新量測的日子，但驗證只檢查該欄非空，沒有任何程式判斷得出它過了沒有——所以兩條豁免從 Day 18 一路有效到 Day 23，發現的方式是我自己回來重新量，不是系統提醒我。現在 `revisit_on` 必須是 ISO 日期，載入時驗證格式，過期的豁免視為不存在並阻擋（`EXPIRED`）。
+- **`explainable` 門檻從不檢查分解加不加得回分數**，只數因子個數與來源——所以 Day 23 加入幾何平均之後，它照樣給 38/38 滿分，一個加不回總分的分解也算「可解釋」。門檻量錯東西比沒有門檻更危險，因為它會發綠燈。已補上重建檢查（依 `form` 判斷：加法比貢獻之和，幾何比乘冪之積）。
+- **`acceptance` 報表把門檻檔宣告的 `applies_to_rules_version` 當成實際載入的版本印出**，所以用 Day 18 的門檻量 Day 23 的規則時，報表會說「rules 0.3.0」而毫無異狀。現在兩個版本都印，不符時出聲；頁尾也不再硬寫「v0.1」。
+- **`degradation_safe` 探針寫死加號**，在幾何平均下比的是一個不存在的數字，而且照樣 PASS。改為依 `form` 合成。
+- **`explain` 碰到新因子直接 `KeyError`**：`SYMBOLS` 是顯示用的查表，查不到卻讓整個 CLI 掛掉。加入 `path` 的符號 `A`，並讓查不到時退回首字母。
+- **`Explanation` 的三個投影在幾何平均下會悄悄說錯話**：`formula` 硬寫加號、`Factor.contribution` 加不回總分、`gap_to()` 的逐項差額加不回分差。Day 16 的紀律是「字串是從數字長出來的，不可能不一致」，加第二種形式時我自己把它打破了。現在算式形狀跟著 `form` 走，幾何形式下不報逐項貢獻（`to_dict` 回 `None`、人讀版留白並說明原因）、`gap_to()` 回空集合而不是一組加不回去的數字。
+- **CI 的 `calibrate` 與 `acceptance` 沒有餵攻擊圖輸入**，所以路徑項被整個移除，兩個 gate 量的是**上一版的模型**——而且是綠的（tau 0.8、只有一組分歧，而真正的 production 是 0.6、兩組）。兩個步驟都補上圖資料。
 - `test_rebuilding_from_snapshots_is_byte_identical` 原本會**實際改寫版控裡的資料檔**，與其他正在讀同一批檔的測試偶發干擾（本次開發中真的紅了一次）。改為透過 `NORTHSTAR_OUT` 建到暫存目錄再與版控比對——不動工作區，驗證強度不變。
 - `docs/articles/day-04.md` 引用三張從未產出的圖（`day-04-visible-vs-context`／`-context-rabbit-hole`／`-v01-portrait`）：Day 4 最後改用一張八格長圖 `day04-infographic.png`，文章沒跟著改，repo 版本破圖至今（已發表版不受影響）。現改為引用長圖，並補上一直存在卻沒被引用的封面 `day04-fig1-cover.png`；另外兩處的圖說保留原文、改為引言樣式。`day-04-visual-captions.md` 標註為規劃稿並記錄實際落點。
 - `cve2action derive-context` 自 Day 13 起產出的 `business_criticality` 整欄為空：Day 13 把 criticality 移出 `assets.csv`（更名 `declared_criticality`）改由 `business_context.csv` 推導，但 `derive_asset_context` 仍讀舊欄位，CLI 也沒有對應輸入。照文件流程產出的 context 接回 `rank` 會整批變成 NEEDS_CONTEXT。當時測試只覆蓋函式層且自行補上 criticality，因此未被發現。現已新增三個走 CLI 的測試，其中一個斷言輸出與版控中的 `asset_context.csv` 逐位元組相同。
 
 ### Changed
 
+- `config/acceptance.yaml` 升到 `0.2.0`、`applies_to_rules_version` 改 `0.4.0`；兩條豁免以今天的量測重新說明，到期日 `2026-10-12`。其中 `range_coverage` 必須承認 Day 18 的預測落空：當時押「Day 20 的可達性引擎會讓 `E` 變寬，跨距自然拉開」，實測從 0.44 變成 **0.443**——錯在前提，Day 20 之後我們沒把觀測連線塞回 `E`，而是另開了第五項，`E` 的值域一個都沒變。
+- 新增 `config/acceptance.v0.1.yaml`：Day 18 發表時的八條門檻凍結檔。已發表文章引用的 6/8、`0.6316`、`0.44` 必須永遠重現得出來，與 Day 23 凍結 `risk_rules.v0.1.yaml` 同一個理由。Day 5–18 的門檻測試全部指向它。
+- `data/calibration/day-17-expert-ranking.yaml` 新增第二組分歧的書面判決（LAB-CONFLUENCE vs PLC-DC-ENV，判給模型）。錯誤形狀與第一組相同：我排第 4、第 5 的依據兩邊都一樣（兩台都查無路徑），回頭看自己寫的理由，兩段都在跟第 1 名比，那兩台之間誰該在前面從頭到尾沒寫下判準。差距只有 0.08 分，已記為 Day 28 的待辦（模型需要「這兩筆分不出來」這個答案）。
 - **更正一個從 Day 11 延續到 Day 17 的錯誤說法**：「v0.1 公式產不出 Low」是錯的。合成探針顯示四個分級都構造得出來（`CVSS 5.5 / ISOLATED / STRONG / NORMAL → 3.95 Low`）；Northstar 沒有 Low，是因為沒有「低嚴重度 × 隔離 × 不重要」的組合。測試註解與規格文件已更正。
 - `test_dataset_matches_blueprint_scale` 補齊檢查：藍圖 §8.2 有七項規模，原本只檢查建好的四項，缺的三項因此一直沒被發現。
 - 未採用藍圖為 CRPS 乘法模型訂的 P0–P3 門檻 80/60/35：套到加法分數上會產生 38 筆中 21 筆 P0，與 P0「緊急評估與處理」的定義矛盾。沿用 9.0/7.0/4.0，量測結果有回歸測試釘住。

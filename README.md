@@ -12,12 +12,13 @@
 | 項目 | 內容 |
 |---|---|
 | 版本 | `0.2.0`（已發行 `v0.2.0-data`）；`v0.3.0-scoring` 門檻已通過（Day 18） |
-| 進度 | Day 1–18 已發表；畫攻擊路徑階段（Day 19–24）開工 |
-| Decision Rule | `config/risk_rules.yaml` 版本 `0.3.0` |
-| 規模 | 369 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 |
-| 最近修訂 | 2026-10-03 |
+| 進度 | Day 1–19 與番外篇已發表；畫攻擊路徑階段（Day 19–24）施工中 |
+| Decision Rule | `config/risk_rules.yaml` 版本 `0.4.0`（五項、加權相加）；Day 5–18 的已發表數字以 `config/risk_rules.v0.1.yaml`（`0.3.0`）重現 |
+| 評分門檻 | `config/acceptance.yaml` 版本 `0.2.0`，九條；7 通過、2 豁免、0 阻擋 |
+| 規模 | 416 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 / 10 身分邊 |
+| 最近修訂 | 2026-10-07 |
 
-施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ **做評分（11–18）** → 畫攻擊路徑（19–24）→ 給修補建議（25–30）
+施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ 做評分（11–18）→ **畫攻擊路徑（19–24）** → 給修補建議（25–30）
 
 ## 快速開始
 
@@ -96,15 +97,21 @@ uv run cve2action rank \
 | [ADR-day-16](docs/decisions/ADR-day-16-explain-api.md) | 理由是計分的產物，不是計分後的字串 |
 | [ADR-day-17](docs/decisions/ADR-day-17-calibration-test.md) | 校準的產出是分歧清單，不是相關係數 |
 | [ADR-day-18](docs/decisions/ADR-day-18-scoring-acceptance.md) | v0.1 評分門檻與明確不修的部分 |
-| [ADR-day-18（二）](docs/decisions/ADR-day-18-crps-tier-mapping.md) | 對外用 P0–P3，CRPS 乘法模型延後 |
+| [ADR-day-18（二）](docs/decisions/ADR-day-18-crps-tier-mapping.md) | 對外用 P0–P3，公式形式延後到 Day 23 決定 |
+| [ADR-day-19](docs/decisions/ADR-day-19-graph-model.md) | 攻擊圖的節點與邊只畫查得到依據的 |
+| [ADR-day-20](docs/decisions/ADR-day-20-reachability.md) | 可達性分四態，推導出來的不等於觀測到的 |
+| [ADR-day-21](docs/decisions/ADR-day-21-identity-preconditions.md) | 權限是前提，不是推導出來的結果 |
+| [ADR-day-22](docs/decisions/ADR-day-22-path-finder.md) | 查無路徑有四種意思，只有一種接近安全 |
+| [ADR-day-23](docs/decisions/ADR-day-23-formula-form.md) | 採用加權相加，依據是門檻而不是論述 |
 
-**文章**（`docs/articles/`，Day 01–15 皆在此）
+**文章**（`docs/articles/`）
 
 | 階段 | 文章 |
 |---|---|
 | 定邊界 | [Day 1](docs/articles/day-01.md)・[2](docs/articles/day-02.md)・[3](docs/articles/day-03.md)・[4](docs/articles/day-04.md)・[5](docs/articles/day-05.md) |
 | 接資料 | [Day 6](docs/articles/day-06.md)・[7](docs/articles/day-07.md)・[8](docs/articles/day-08.md)・[9](docs/articles/day-09.md)・[10](docs/articles/day-10.md) |
 | 做評分 | [Day 11](docs/articles/day-11.md)・[12](docs/articles/day-12.md)・[13](docs/articles/day-13.md)・[14](docs/articles/day-14.md)・[15](docs/articles/day-15.md)・[16](docs/articles/day-16.md)・[17](docs/articles/day-17.md)・[18](docs/articles/day-18.md) |
+| 畫攻擊路徑 | [Day 19](docs/articles/day-19.md)・[20](docs/articles/day-20.md)・[21](docs/articles/day-21.md)・[22](docs/articles/day-22.md)・[23](docs/articles/day-23.md) |
 
 **番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化，以及加法／幾何平均之外還有哪些形式。
 
@@ -116,11 +123,14 @@ uv run cve2action rank \
 src/cve2action/
 ├── collectors/      NVD、EPSS、KEV——一律落成帶日期的快照，可離線重跑
 ├── normalization/   cvss、exposure、business、threat、control——把事實變成可進公式的值
-├── attack_graph/    resolve、model、build、reachability、identity（權限前提）、paths
-├── engine.py        評分與排序
+├── attack_graph/    resolve、model、build、reachability、identity、paths、diagnose
+├── scoring/         engine、explain、path_score、calibration、acceptance
 ├── rules.py         載入並驗證 risk_rules.yaml，違反即拒載
 ├── io.py / models.py / cli.py
-config/risk_rules.yaml    權重、值域、分級、控制適用範圍
+config/risk_rules.yaml          權重、值域、分級、控制適用範圍（production，加權相加）
+config/risk_rules.geometric.yaml  §9.5 幾何平均；已比較、未採用，保留為對照組
+config/risk_rules.v0.1.yaml     Day 5–18 的凍結版，已發表數字靠它重現
+config/acceptance.yaml          評分門檻九條（`acceptance.v0.1.yaml` 為 Day 18 凍結版）
 data/schemas/             資料契約（CI 強制驗證）
 data/snapshots/           NVD / EPSS / KEV 的固定快照
 data/synthetic/northstar/ 虛構企業資料集，可由 scripts/build_northstar.py 重建

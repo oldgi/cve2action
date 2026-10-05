@@ -2,7 +2,7 @@
 
 | 欄位 | 內容 |
 |---|---|
-| 規格版本 | 0.3.2（`config/risk_rules.yaml` 為 `0.3.0`、`config/acceptance.yaml` 為 `0.1.0`） |
+| 規格版本 | 0.4.0（`config/risk_rules.yaml` 為 `0.4.0`、`config/acceptance.yaml` 為 `0.2.0`） |
 | 狀態 | Live——隨 ADR 更新；每次改動都要在 §8 留下一行 |
 | 依據 | [Day 5 文章](../articles/day-05.md)、[ADR-day-05](../decisions/ADR-day-05-decision-engine-v01.md) 起的 ADR 鏈（見 §8） |
 | 實作 | `src/cve2action/`：`rules.py`、`io.py`、`models.py`、`cli.py`、`collectors/`、`normalization/`、`scoring/` |
@@ -65,14 +65,16 @@ assets.csv + controls.csv + business_context.csv  →  asset_context.csv
 
 基準檔：[`config/risk_rules.yaml`](../../config/risk_rules.yaml)。載入時強制驗證，違反即拒載：
 
-1. `weights` 只能有 `severity` / `threat` / `exposure` / `business` 四鍵，且總和 = 1。
-2. 三組值域映射的鍵必須與 §2.2 值域完全一致（不得增刪），數值皆在 0–1。
-3. `control_effectiveness.UNKNOWN >= NONE`（**UNKNOWN 不得降低曝險**）。
-4. `priority_bands` 必須不重疊且涵蓋 0–10。
-5. `cvss.version_preference` 非空、無重複，且只含支援的版本。
-6. `exposure.zone_reachability` 的值必須都在 `reachability` 值域內；`control_evidence_max_age_days` 為正整數。
-7. `business_impact` 推導出的 criticality 必須都在 `business_criticality` 值域內。
-8. `threat.epss_log_base` 為正數、`threat.kev_listed_value` 在 0–1。
+1. `weights` 必須有 `severity` / `threat` / `exposure` / `business` 四鍵，`path` 可選
+   （Day 23 起 production 使用它；`risk_rules.v0.1.yaml` 沒有，所以它是可選而非必填），總和 = 1。
+2. `form` 只能是 `additive` 或 `geometric`，省略時為 `additive`（見 §3.3）。
+3. 三組值域映射的鍵必須與 §2.2 值域完全一致（不得增刪），數值皆在 0–1。
+4. `control_effectiveness.UNKNOWN >= NONE`（**UNKNOWN 不得降低曝險**）。
+5. `priority_bands` 必須不重疊且涵蓋 0–10。
+6. `cvss.version_preference` 非空、無重複，且只含支援的版本。
+7. `exposure.zone_reachability` 的值必須都在 `reachability` 值域內；`control_evidence_max_age_days` 為正整數。
+8. `business_impact` 推導出的 criticality 必須都在 `business_criticality` 值域內。
+9. `threat.epss_log_base` 為正數、`threat.kev_listed_value` 在 0–1。
 9. `controls.applicability` 每項的 `attack_vectors` 非空，且只含 `NETWORK` / `ADJACENT_NETWORK` / `LOCAL` / `PHYSICAL`。
 
 ## 3. 計分模型
@@ -111,8 +113,40 @@ Priority Score = 10 × (0.35×S + 0.15×T + 0.25×E + 0.25×B)   （四捨五入
 有 21 筆 P0，與 P0「緊急評估與處理」的定義矛盾。見
 [ADR-day-18（二）](../decisions/ADR-day-18-crps-tier-mapping.md)。
 
-**0.35/0.15/0.25/0.25 是起始假設，不是標準答案**；Day 17 以人工排序校準、Day 18 定門檻，
-任何權重或門檻變更必須留下 ADR。
+**權重是起始假設，不是標準答案**；Day 17 以人工排序校準、Day 18 定門檻，
+任何權重或門檻變更必須留下 ADR。Day 23 起為 `0.28/0.12/0.20/0.20/0.20`（含第五項 `path`）；
+Day 5–18 的已發表數字以 [`config/risk_rules.v0.1.yaml`](../../config/risk_rules.v0.1.yaml)
+（`0.3.0`，四項）重現。
+
+### 3.3 第五項 `A`（攻擊路徑分數）與合成形式（Day 23）
+
+`A` 照藍圖 §9.3 拆四項，由 Day 19–22 建好的圖算出，不新增人工輸入：
+
+```text
+A = 0.40·A_Reachability + 0.25·A_Privilege + 0.25·A_CrownJewel + 0.10·A_Hops
+```
+
+| 項 | 來源 | 定義 |
+|---|---|---|
+| `A_Reachability` | 路徑搜尋 | 有 Internet 可達路徑＝1.0，查無＝**0.05**（下限，非 0） |
+| `A_Privilege` | Day 21 `privilege_obtainable` | 權限等級正規化到 0–1 |
+| `A_CrownJewel` | 路徑搜尋 | 自己是或走得到 Crown Jewel＝1.0，否則 0 |
+| `A_Hops` | 最短路徑長度 | `1 / 跳數` |
+
+合成形式由 `form` 決定，兩種都已實作：
+
+| `form` | 公式 | 狀態 |
+|---|---|---|
+| `additive` | `10 × Σ wᵢvᵢ` | **production**（`config/risk_rules.yaml`） |
+| `geometric` | `10 × Π max(vᵢ, 0.05)^wᵢ` | 保留對照（`config/risk_rules.geometric.yaml`），CI 不跑、測試跑 |
+
+幾何平均的指數和為 1，所以它是**加權幾何平均而非連乘**；下限 0.05 與藍圖 §9.5 的
+`max(A, 0.05)` 取同一個數，路徑項最差只能把分數打到約一半，不是一票否決。
+
+採用加法的依據是 `acceptance` 的 `attributable` 門檻（加權相加 37/37、幾何平均 0/37）：
+幾何平均下總分不是各項之和，`Explanation.gap_to()` 答不出「為什麼它排在我前面」。
+兩種形式的 tau 與分歧清單完全相同，所以校準量不出形式的好壞。
+重新打開這個決定的條件見 [ADR-day-23](../decisions/ADR-day-23-formula-form.md)。
 
 ### 3.2 缺資料時的退化行為（不補零）
 
@@ -123,6 +157,9 @@ Priority Score = 10 × (0.35×S + 0.15×T + 0.25×E + 0.25×B)   （四捨五入
 | 控制證據過期 | 降為 `UNKNOWN`（係數 1.0），不是 `NONE` | 過期不代表失效，但不能再拿它打折 |
 | 控制攔不到這類攻擊 | 降為 `NONE`，`control_source` 註明不適用 | 這是事實，不是未知 |
 | 讀不到 CVSS 向量 | 不折減，記為 `UNKNOWN` | 不能證明攔得到，就不能拿它打折 |
+| 沒有攻擊圖資料 | 移除 `A` 項，**權重退回 `exposure`** | 補零等於宣告「走不到」，而我們只是沒查 |
+| 有圖但查無路徑 | `A_Reachability` 取下限 0.05 | Day 22：六台查無路徑沒有一台是被擋住的 |
+| 權限無法證明 | 移除 `A_Privilege`，權重退回可達性 | 不猜中間值；可達性是唯一一定知道的項 |
 | 任何必要 context 缺值 | `NEEDS_CONTEXT`，不評分 | 見 §4 |
 
 ### 3.3 控制適用性（Day 15）
@@ -263,24 +300,41 @@ uv run cve2action rank --scanner data/synthetic/day-06-scanner.csv \
 | 0.3.0 | 15 | 控制適用性先於強度；輸出加 `control_effectiveness` / `control_source` | [ADR-day-15](../decisions/ADR-day-15-control-calibration.md) |
 | 0.3.1 | 16 | Explanation 成為計分的第一級產物，列與理由改為其投影；`engine` 移入 `scoring/` | [ADR-day-16](../decisions/ADR-day-16-explain-api.md) |
 | 0.3.2 | 17–18 | 校準基準與分歧解釋；八條評分門檻與豁免機制，v0.1 baseline 凍結 | [ADR-day-17](../decisions/ADR-day-17-calibration-test.md)、[ADR-day-18](../decisions/ADR-day-18-scoring-acceptance.md) |
-| 0.3.3 | 18 | 對外新增 P0–P3 處置層級；CRPS 乘法模型延後至 v1.0 之後 | [ADR-day-18（二）](../decisions/ADR-day-18-crps-tier-mapping.md) |
+| 0.3.3 | 18 | 對外新增 P0–P3 處置層級；CRPS 乘法模型延後至 Day 23 決定 | [ADR-day-18（二）](../decisions/ADR-day-18-crps-tier-mapping.md) |
+| 0.4.0 | 23 | 第五項 `A`（§9.3）進入公式，權重 `0.28/0.12/0.20/0.20/0.20`；`form` 支援 `additive`／`geometric`，**採用 additive**；門檻第九條 `attributable`；豁免到期日改 ISO 並強制比對 | [ADR-day-23](../decisions/ADR-day-23-formula-form.md) |
 
-## 8.1 v0.1 評分門檻（Day 18）
+## 8.1 評分門檻
 
-「可用」的定義在 [`config/acceptance.yaml`](../../config/acceptance.yaml)，八條，分兩種：
+「可用」的定義在 [`config/acceptance.yaml`](../../config/acceptance.yaml)，**九條**，分兩種：
 
 - **structural**（3 條）——公式本身的性質，用合成探針驗證，與資料集無關：
   四個分級都構造得出來、缺資料不得讓分數變低、任一因子單獨變大分數不得下降。
-- **empirical**（5 條）——在 Northstar 上量：完整可解釋性、分辨力、分級平衡、值域利用、頂端飽和。
+- **empirical**（6 條）——在 Northstar 上量：完整可解釋性、**逐項歸因**、分辨力、
+  分級平衡、值域利用、頂端飽和。
 
-結果 6 通過、2 豁免（`band_balance` 0.6316、`range_coverage` 0.44）、0 阻擋。兩條失敗同一個
-根因——值域映射只有三到五檔，輸出不可能比輸入細——都豁免到 Day 20 的可達性引擎之後重新量。
+Day 23 的現況（rules `0.4.0`）：7 通過、2 豁免（`band_balance` 0.5263、`range_coverage` 0.443）、
+0 阻擋。Day 18 發表的 6/8（`0.6316`／`0.44`）以
+[`config/acceptance.v0.1.yaml`](../../config/acceptance.v0.1.yaml) 重現。
+
+Day 23 修掉門檻自己的三個缺陷：
+
+1. `explainable` 只數因子個數與來源，**從不檢查分解加不加得回分數**——所以它給
+   幾何平均滿分。已補上重建檢查。
+2. 新增 `attributable`（§3.3）。Day 16 做 `gap_to` 是這個專案最核心的對外承諾，
+   Day 18 的八條沒有一條看守它。
+3. `revisit_on` 原本接受 `Day 20` 這種字串，程式只檢查非空——那是**永久豁免**。
+   現在必須是 ISO 日期，過期即阻擋（`--today` 可指定判斷日，預設今天）。
 
 ```bash
 uv run cve2action acceptance --scanner ... --context ... --rules ... --criteria config/acceptance.yaml
 ```
 
-沒過又沒有 waiver 即 exit 1；CI 每次都跑。`waivers` 缺 `reason` 或 `revisit_on` 會被拒絕載入。
+沒過又沒有**有效** waiver 即 exit 1；CI 每次都跑。`waivers` 缺 `reason`、`revisit_on`，
+或 `revisit_on` 不是 ISO 日期，會被拒絕載入。報表會印出實際載入的 rules 版本，
+與門檻檔宣告的 `applies_to_rules_version` 不符時出聲——否則量的是上一版的標準。
+
+CI 的 `calibrate` 與 `acceptance` 都必須餵攻擊圖輸入（`--assets/--interfaces/--services/
+--network/--identity/--policies/--findings`）。不給，引擎會移除 `A` 項，量到的是上一版的模型。
 
 ## 9. 非目標（目前明確不做）
 
