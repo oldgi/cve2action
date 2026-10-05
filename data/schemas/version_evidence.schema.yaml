@@ -1,0 +1,45 @@
+file: version_evidence.csv
+version: "1.0.0"
+produced_by: 資產盤點／套件管理／廠商入口／人工確認
+consumed_by: Day 25 的適用性閘門（§9.0 閘門 2、藍圖成功標準 #3）
+description: >
+  一列＝「針對這一筆 finding，我們憑什麼說裝的是這一版」。
+  鍵是 (asset_id, cve) 而不是服務名——Day 21 已經證明名字 join 只對得上 15/40，
+  「這個 CVE 該看哪個產品的版本」是人的判斷，寫進資料裡看得見、審得到。
+  因此 product 可以不等於 services.csv 的 service：例如 CVE-2019-0708 要看的是
+  作業系統版本，不是 services.csv 裡那個 rdp 10.0（協定版本答不了這個問題）。
+columns:
+  - name: asset_id
+    required: true
+    blank_ok: false
+  - name: cve
+    required: true
+    blank_ok: false
+    note: 這份證據是為哪一筆 finding 準備的。同一台可以對不同 CVE 量不同產品。
+  - name: product
+    required: true
+    blank_ok: false
+    note: 被量的是哪個東西。不必等於 services.csv 的 service。
+  - name: version
+    required: true
+    blank_ok: false
+    note: >
+      照該產品自己的編號寫，不要換算。編號體系對不上（例如 moveit_cloud 的 15.0.x
+      對上 moveit_transfer 的 2021.x）本身就是判不了的理由，換算會把它藏起來。
+  - name: source
+    required: true
+    blank_ok: false
+    domain: [package_manager, agent_inventory, vendor_portal, banner, manual]
+    note: >
+      強弱有差，而這個差別決定判得了判不了。package_manager／agent_inventory／
+      vendor_portal 查得到安裝紀錄，可以定案；**banner 不能定案**——發行版回溯
+      修補（backport）之後服務自報的版本不會變，看起來中招其實已經修了；
+      manual 要看 verified_at 夠不夠新。
+  - name: verified_at
+    required: true
+    blank_ok: false
+    note: ISO 日期。過期的證據不得用來判 NOT_APPLICABLE——與控制證據、Day 23 的豁免同一條紀律。
+  - name: notes
+    required: true
+    blank_ok: true
+    note: 對照 CPE 範圍之後的一句話。判不了的時候，這裡要寫清楚卡在哪。

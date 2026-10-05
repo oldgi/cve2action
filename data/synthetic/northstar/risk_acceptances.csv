@@ -1,0 +1,5 @@
+acceptance_id,asset,cve,status,reason,approver,valid_until,ref
+ACC-001,NS-LAB-CONFLUENCE-01,CVE-2022-26134,APPROVED,實驗室網段、不存業務資料、RTO 168 小時；下一個維護窗口隨版本升級一併處理,林思妤（資安經理）,2026-12-31,RISK-2026-0418
+ACC-002,NS-APP-REPORT-01,CVE-2020-1938,APPROVED,AJP 連接埠僅綁定 127.0.0.1，前端不轉發；升級 Tomcat 需同步改報表排程,陳柏翰（應用維運主管）,2026-11-30,RISK-2026-0392
+ACC-003,NS-WEB-PORTAL-02,CVE-2021-41773,APPROVED,改版凍結期間暫緩，待 Q3 結束後處理,陳柏翰（應用維運主管）,2026-08-31,RISK-2026-0301
+ACC-004,NS-VPN-GW-01,CVE-2018-13379,REVOKED,原以為僅限內部測試介面；CISA KEV 收錄後撤回此接受,林思妤（資安經理）,2026-12-31,RISK-2025-0877

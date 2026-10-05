@@ -39,6 +39,16 @@ INTERFACE_HEADER = ["interface_id", "asset_id", "ip", "hostname", "mac", "interf
 SERVICE_HEADER = ["asset_id", "port", "protocol", "service", "version", "state",
                   "runs_as"]
 POLICY_HEADER = ["policy_id", "source_scope", "destination", "port", "action", "verified_at"]
+# Day 25 的適用性閘門：裝的到底是哪一版，以及我們憑什麼這樣說。
+# 刻意**以 (asset_id, cve) 為鍵**，不靠服務名 join——Day 21 已經證明名字對不起來
+# （服務名只對得上 15/40）。「這個 CVE 該看哪個產品的版本」是人的判斷，
+# 寫進資料裡看得見、審得到，比埋在比對規則裡安全。
+VERSION_EVIDENCE_HEADER = ["asset_id", "cve", "product", "version", "source",
+                           "verified_at", "notes"]
+# Day 25／藍圖 §9.6：「任何 P0/P1 降級都必須留下原因、核准人與有效期限。」
+# 這是那句話的載體。沒有這一列，就沒有人可以把一筆 finding 降下來。
+RISK_ACCEPTANCE_HEADER = ["acceptance_id", "asset", "cve", "status", "reason",
+                          "approver", "valid_until", "ref"]
 CONTEXT_HEADER = ["asset", "environment", "reachability", "control_effectiveness",
                   "business_criticality", "reachability_source", "control_source",
                   "business_source"]
@@ -323,6 +333,74 @@ SCANNER_BLANK = {("NS-PLC-DC-ENV", "CVE-2024-6242"), ("NS-MON-01", "CVE-2021-442
 SCANNER_STALE = {("NS-JUMP-01", "CVE-2019-0708"): "9.9"}
 
 
+
+# 版本證據（Day 25）。每一列的版本與範圍都對照過 data/snapshots/nvd 裡的真實 CPE，
+# 不是編出來的——否則文章的數字就是在虛構上再疊一層虛構。
+#
+# source 的強弱是有差別的，這正是今天的重點：
+#   package_manager／agent_inventory／vendor_portal —— 查得到安裝紀錄，可以定案
+#   banner                                        —— 服務自己報的，**不能定案**
+#                                                    （發行版回溯修補時 banner 不會變）
+#   manual                                        —— 人工確認，要看 verified_at 新不新
+VERSION_EVIDENCE = [
+    # --- 版本落在受影響範圍內：APPLICABLE，該修 -----------------------------
+    ("NS-WEB-PORTAL-01", "CVE-2021-41773", "apache-httpd", "2.4.49", "package_manager",
+     "2026-09-18", "CPE 只列 2.4.49 這一版，剛好命中"),
+    ("NS-WEB-PORTAL-02", "CVE-2021-41773", "apache-httpd", "2.4.49", "package_manager",
+     "2026-09-18", "與 PORTAL-01 同一個映像檔"),
+    ("NS-VPN-GW-01", "CVE-2024-21762", "fortios", "6.0.4", "vendor_portal",
+     "2026-09-20", "受影響 6.0.0–6.0.18"),
+    ("NS-VPN-GW-01", "CVE-2018-13379", "fortios", "6.0.4", "vendor_portal",
+     "2026-09-20", "受影響 6.0.0–6.0.5；同一台同時中兩個"),
+    ("NS-EDGE-RTR-01", "CVE-2023-20198", "ios-xe", "17.6.1", "vendor_portal",
+     "2026-09-20", "受影響 17.6–17.6.6a"),
+    ("NS-APP-INTRANET-01", "CVE-2023-22515", "confluence", "8.5.1", "agent_inventory",
+     "2026-09-19", "受影響 8.5.0–8.5.2"),
+    ("NS-LAB-CONFLUENCE-01", "CVE-2022-26134", "confluence", "7.13.0", "agent_inventory",
+     "2026-09-19", "受影響 7.13.0–7.13.7"),
+    ("NS-APP-REPORT-01", "CVE-2020-1938", "tomcat", "9.0.30", "package_manager",
+     "2026-09-18", "受影響 9.0.0–9.0.31"),
+    ("NS-AD-DC-01", "CVE-2020-1472", "windows-server", "2019", "agent_inventory",
+     "2026-09-17", "CPE 列 windows_server_2019"),
+
+    # --- 版本落在範圍外：NOT_APPLICABLE，不必修 ------------------------------
+    # 這是今天唯一「最便宜的處置」真的成立的一筆。注意量的是**作業系統**版本，
+    # 不是 services.csv 裡那個 rdp 10.0——協定版本答不了這個 CVE 的問題。
+    ("NS-JUMP-01", "CVE-2019-0708", "windows-server", "2019", "agent_inventory",
+     "2026-09-17", "CPE 只列 windows_7／windows_server_2008／2008_r2；2019 不在其中"),
+
+    # --- 證據拿得出來，但定不了案：REVIEW_REQUIRED ---------------------------
+    ("NS-FILE-SRV-01", "CVE-2018-15919", "openssh", "7.4p1", "banner",
+     "2026-09-21", "受影響 5.9–7.8，看起來命中——但這是 banner，發行版回溯修補後它不會變"),
+    ("NS-APP-BILLING-01", "CVE-2023-34362", "moveit-transfer", "15.0.1", "manual",
+     "2026-09-15", "15.0.x 是 moveit_cloud 的編號；CPE 的 moveit_transfer 用 2021.x／2022.x，兩套編號對不起來"),
+    ("NS-MAIL-GW-01", "CVE-2021-26855", "exchange-server", "15.2.792", "agent_inventory",
+     "2026-09-16", "15.2.x 是 Exchange 2019；CPE 以 2013／2016／2019 加 CU 編號表示，數字版本對不上去"),
+    ("NS-PLC-DC-ENV", "CVE-2024-6242", "controllogix", "32.011", "manual",
+     "2026-08-02", "NVD 這筆 configurations 是空的——沒有範圍可比，而且這份人工紀錄也過期了"),
+]
+
+# 風險接受（Day 25，藍圖 §9.6）。一列＝一次有紀錄的降級。
+# status 為 APPROVED 且 valid_until 未過期才算數；過期的接受不是接受
+# （與 Day 23 的豁免到期同一條紀律）。
+RISK_ACCEPTANCES = [
+    ("ACC-001", "NS-LAB-CONFLUENCE-01", "CVE-2022-26134", "APPROVED",
+     "實驗室網段、不存業務資料、RTO 168 小時；下一個維護窗口隨版本升級一併處理",
+     "林思妤（資安經理）", "2026-12-31", "RISK-2026-0418"),
+    ("ACC-002", "NS-APP-REPORT-01", "CVE-2020-1938", "APPROVED",
+     "AJP 連接埠僅綁定 127.0.0.1，前端不轉發；升級 Tomcat 需同步改報表排程",
+     "陳柏翰（應用維運主管）", "2026-11-30", "RISK-2026-0392"),
+    # 過期：日期已過 scenario 基準日，必須失效並重新送審
+    ("ACC-003", "NS-WEB-PORTAL-02", "CVE-2021-41773", "APPROVED",
+     "改版凍結期間暫緩，待 Q3 結束後處理",
+     "陳柏翰（應用維運主管）", "2026-08-31", "RISK-2026-0301"),
+    # 已撤銷：KEV 收錄之後撤回，用來證明「有人簽過」不等於「現在還算數」
+    ("ACC-004", "NS-VPN-GW-01", "CVE-2018-13379", "REVOKED",
+     "原以為僅限內部測試介面；CISA KEV 收錄後撤回此接受",
+     "林思妤（資安經理）", "2026-12-31", "RISK-2025-0877"),
+]
+
+
 def write_csv(name: str, header: list[str], rows: list[tuple]) -> None:
     with (OUT / name).open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, lineterminator="\n")
@@ -344,6 +422,8 @@ def main() -> None:
     write_csv("asset_interfaces.csv", INTERFACE_HEADER, ASSET_INTERFACES)
     write_csv("services.csv", SERVICE_HEADER, SERVICES)
     write_csv("network_policies.csv", POLICY_HEADER, NETWORK_POLICIES)
+    write_csv("version_evidence.csv", VERSION_EVIDENCE_HEADER, VERSION_EVIDENCE)
+    write_csv("risk_acceptances.csv", RISK_ACCEPTANCE_HEADER, RISK_ACCEPTANCES)
     asset_dicts = [dict(zip(ASSET_HEADER, row, strict=True)) for row in ASSETS]
     control_dicts = [dict(zip(CONTROL_HEADER, row, strict=True)) for row in CONTROLS]
     business_dicts = [dict(zip(BUSINESS_HEADER, row, strict=True)) for row in BUSINESS]

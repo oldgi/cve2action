@@ -1,0 +1,46 @@
+file: risk_acceptances.csv
+version: "1.0.0"
+produced_by: 風險接受流程（人的決定，不是系統算出來的）
+consumed_by: Day 25 的 §9.6 規則覆寫
+description: >
+  一列＝一次有紀錄的降級。藍圖 §9.6 寫著「分數不取代人工決策。任何 P0/P1 降級
+  都必須留下原因、核准人與有效期限」——這個檔就是那句話的載體。
+  沒有有效的一列，就沒有人可以把一筆 finding 降下來。
+
+  與 Day 2 的 day-02-findings.csv 是同一組欄位語意（risk_acceptance_*），
+  但在 Northstar 的正規化結構裡獨立成檔：掃描器不知道誰簽核了什麼，
+  把核准人塞進掃描結果等於宣稱那是掃出來的事實。
+columns:
+  - name: acceptance_id
+    required: true
+    blank_ok: false
+  - name: asset
+    required: true
+    blank_ok: false
+  - name: cve
+    required: true
+    blank_ok: false
+  - name: status
+    required: true
+    blank_ok: false
+    domain: [APPROVED, REVOKED]
+    note: >
+      只有 APPROVED **且** valid_until 未過期才算數。
+      過期的接受不是接受，與 Day 23 的豁免到期是同一條紀律：
+      寫了日期卻沒有人比對，等於永久豁免。
+  - name: reason
+    required: true
+    blank_ok: false
+    note: 為什麼現在不修。空白等於沒有理由，而沒有理由的降級不該存在。
+  - name: approver
+    required: true
+    blank_ok: false
+    note: 具名到人。「資安部門」不是核准人。
+  - name: valid_until
+    required: true
+    blank_ok: false
+    note: ISO 日期。接受風險是有期限的決定，不是一次性的赦免。
+  - name: ref
+    required: true
+    blank_ok: false
+    note: 可追回原始簽核紀錄的編號。沒有它，上面三欄都無法查證。
