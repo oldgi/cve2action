@@ -8,7 +8,10 @@ from cve2action.engine import rank, score_finding
 from cve2action.models import DECISION_NEEDS_CONTEXT, DECISION_SCORED
 from cve2action.rules import load_rules
 
-RULES = load_rules(Path(__file__).resolve().parents[1] / "config" / "risk_rules.yaml")
+# Day 5–18 的基準用 **v0.1 凍結版**規則：那些數字是已發表文章的依據，
+# 必須永遠重現得出來。production 設定（config/risk_rules.yaml）自 Day 23 起
+# 多了路徑項，分數因此不同——那是預期的，不是回歸。
+RULES = load_rules(Path(__file__).resolve().parents[1] / "config" / "risk_rules.v0.1.yaml")
 
 
 def ctx(reachability, control, business, environment="PROD"):

@@ -41,6 +41,12 @@ OUTPUT_COLUMNS = (
     "reason",
 )
 
+# 合成分數的形式（Day 23，ADR-day-23）
+ADDITIVE = "additive"
+GEOMETRIC = "geometric"
+# 幾何平均碰到 0 會整體歸零；下限與藍圖 §9.5 的 max(A, 0.05) 取同一個數
+GEOMETRIC_FLOOR = 0.05
+
 DECISION_SCORED = "SCORED"
 DECISION_NEEDS_CONTEXT = "NEEDS_CONTEXT"
 
@@ -82,6 +88,8 @@ class RiskRules:
     threat: object | None = None
     # 控制措施的適用範圍（Day 15）：攔截點不在攻擊路徑上的控制不得折減
     controls: object | None = None
+    # 合成分數的形式：additive 或 geometric（Day 23）
+    form: str = ADDITIVE
 
     def band_for(self, score: float) -> str:
         return self.band_object_for(score).label

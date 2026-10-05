@@ -1,0 +1,12 @@
+# 這個 repo 的文字檔一律以 LF 存放與簽出。
+#
+# 沒有這個檔時，Windows 上的 core.autocrlf=true 會在每次 checkout／merge 把工作區
+# 改寫成 CRLF，而 scripts/build_northstar.py 寫出來的是 LF——於是
+# test_rebuilding_from_snapshots_is_byte_identical 這種逐位元組比對會偶發紅燈，
+# 紅的時機取決於上一次做了什麼 git 操作。那不是測試的問題，是設定缺了一塊。
+* text=auto eol=lf
+
+# 二進位檔不要做任何換行轉換
+*.png binary
+*.jpg binary
+*.ico binary

@@ -9,7 +9,10 @@ from cve2action.normalization.exposure import ExposureError
 from cve2action.rules import load_rules
 
 ROOT = Path(__file__).resolve().parents[1]
-RULES = load_rules(ROOT / "config" / "risk_rules.yaml").business_impact
+# Day 5–18 的基準用 **v0.1 凍結版**規則：那些數字是已發表文章的依據，
+# 必須永遠重現得出來。production 設定（config/risk_rules.yaml）自 Day 23 起
+# 多了路徑項，分數因此不同——那是預期的，不是回歸。
+RULES = load_rules(ROOT / "config" / "risk_rules.v0.1.yaml").business_impact
 
 
 def ctx(data_class="INTERNAL", rto="48", customer_facing="no", asset_id="A"):

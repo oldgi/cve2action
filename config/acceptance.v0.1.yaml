@@ -1,0 +1,101 @@
+# ⚠ 凍結檔。Day 18 發表時的八條門檻，對應 `config/risk_rules.v0.1.yaml`（rules 0.3.0）。
+#
+# Day 18 的文章引用了「通過 6/8、band_balance 0.6316、range_coverage 0.44」。
+# 那些數字是讀者看得到的依據，必須永遠重現得出來，所以這個檔不改——
+# 改了它，等於讓已經發表的文章變成錯的。
+#
+# 現行門檻在 `config/acceptance.yaml`（Day 23 起九條）。兩個差別：
+#   1. 多了 `attributable`（Day 16 的承諾，Day 18 漏掉的那一條）
+#   2. `revisit_on` 從「Day 20」這種字串改成 ISO 日期，過期即阻擋
+# 凍結的是**量測值**（6/8、0.6316、0.44），那是文章引用的數字。
+# 兩個 `revisit_on` 原文寫的是字串 `Day 20`——不可檢查，正是 Day 23 要修的那個缺陷。
+# 格式照新規則遷移成 ISO 日期（Day 20 ＝ 2026-10-04），原文留在下面的註解裡當證物。
+
+# Decision Engine v0.1 評分門檻（Day 18，ADR-day-18）
+#
+# 「可用」不是感覺排得還行，是一組量得出來的條件。這個檔定義那組條件；
+# `cve2action acceptance` 逐條量，`scripts/` 與 CI 每次都跑。
+#
+# 兩件事要先講清楚：
+#
+# 1. **門檻分兩種**。structural 是公式本身的性質，用合成探針驗證，與任何資料集無關；
+#    empirical 是在某個資料集上量出來的，換資料集就會變。把兩者混在一起，
+#    就會像我從 Day 11 到 Day 17 一樣，把「這個資料集沒有那種組合」誤判成「公式壞了」。
+#
+# 2. **沒過不一定要修**。沒過而且沒有 waiver，exit 1。沒過但有 waiver，要寫清楚
+#    為什麼現在不修、根因是什麼、哪一天重新量。選擇不修是決定，不是忽略。
+
+version: "0.1.0"
+applies_to_rules_version: "0.3.0"
+
+criteria:
+  # --- structural：公式的性質，用合成探針驗證 -------------------------------
+  - id: bands_reachable
+    kind: structural
+    description: 四個分級都必須構造得出來，否則有一級是裝飾
+    threshold: all
+
+  - id: degradation_safe
+    kind: structural
+    description: 缺資料不得讓分數變低——不知道不能換來比較安全的名次
+    threshold: all
+
+  - id: monotonic
+    kind: structural
+    description: 任一因子單獨變大，分數不得下降
+    threshold: all
+
+  # --- empirical：在 Northstar 上量出來的 -----------------------------------
+  - id: explainable
+    kind: empirical
+    description: 每一筆評分都要有完整因子分解，且每項因子都有來源
+    threshold: 1.0
+
+  - id: discrimination
+    kind: empirical
+    description: 相異分數佔評分筆數的比例；太低代表排序分不開
+    threshold: 0.70
+
+  - id: band_balance
+    kind: empirical
+    description: 單一分級不得超過評分筆數的這個比例；過度集中等於沒有分級
+    threshold: 0.50
+    direction: at_most
+
+  - id: range_coverage
+    kind: empirical
+    description: 實際分數跨距佔 0–10 的比例；太窄代表刻度沒被用到
+    threshold: 0.60
+
+  - id: ceiling_saturation
+    kind: empirical
+    description: 分數撞到 10.0 的比例上限；常撞頂端就失去解析度
+    threshold: 0.05
+    direction: at_most
+
+# 沒通過但現在不修的，必須在這裡說明。沒有 waiver 的失敗會讓 acceptance exit 1。
+waivers:
+  - id: band_balance
+    measured: 0.6316
+    reason: >
+      38 筆裡 24 筆是 High。要把它攤開，得改 business_criticality 或 reachability 的
+      值域映射——而那會讓 Day 5 到 Day 17 建立的每一個回歸基準同時失效。
+      v0.1 的目的是凍結一個可比較的起點，不是讓分布看起來漂亮。
+      根因不在權重：B 只有三檔（1.0／0.7／0.4）、E 實際只取到五個值，
+      輸入本身的解析度就這麼粗，輸出不可能比輸入細。
+    # 原文：revisit_on: Day 20 —— 一句話，不是到期日（Day 23 發現）
+    revisit_on: "2026-10-04"
+    revisit_because: >
+      Day 20 的可達性引擎會用觀測到的連線取代 zone 推導，E 不再只有五個值。
+      屆時重新量這兩條；如果分布仍然這麼集中，才是公式的問題。
+
+  - id: range_coverage
+    measured: 0.44
+    reason: >
+      實際分數落在 5.60–10.00，只用掉 0–10 的 44%。與 band_balance 同一個根因：
+      B 的地板是 0.4、E 的地板是 0.08，兩者先給了 1.2 分的保底，
+      再加上掃描器輸出的 CVSS 很少低於 5，分數自然被推到上半段。
+      這是「這個模型沒有『不重要』這個答案」的直接後果，而那是 Day 5 刻意的設計。
+    # 原文：revisit_on: Day 20
+    revisit_on: "2026-10-04"
+    revisit_because: 同上；E 的分布變寬後跨距會自然拉開。

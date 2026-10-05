@@ -5,6 +5,20 @@
 """
 
 from .build import build_graph
+from .choke import Choke, ChokeReport, Cut, analyse, combined_cut
+from .choke import render as render_choke
+from .diagnose import (
+    BLOCKED_BY_POLICY,
+    EXCLUDED,
+    NO_INBOUND,
+    REACHABLE,
+    SOURCE_UNREACHABLE,
+    Coverage,
+    NoPath,
+    coverage,
+    diagnose,
+    render_coverage,
+)
 from .identity import BLOCKED, SATISFIED, UNPROVEN, Obtainable, Precondition, privilege_obtainable
 from .identity import annotate as identity_annotate
 from .identity import check as identity_check
@@ -48,4 +62,7 @@ __all__ = [
     "BY_POLICY", "INTRA_ZONE", "DRIFT", "UNGOVERNED",
     "identity_annotate", "identity_check", "privilege_obtainable",
     "Obtainable", "Precondition", "SATISFIED", "BLOCKED", "UNPROVEN",
+    "diagnose", "coverage", "render_coverage", "NoPath", "Coverage",
+    "NO_INBOUND", "SOURCE_UNREACHABLE", "BLOCKED_BY_POLICY", "EXCLUDED", "REACHABLE",
+    "analyse", "render_choke", "combined_cut", "Choke", "ChokeReport", "Cut",
 ]

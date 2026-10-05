@@ -13,7 +13,7 @@ import pytest
 from cve2action.engine import score_finding
 from cve2action.rules import load_rules
 
-RULES_PATH = "config/risk_rules.yaml"
+RULES_PATH = "config/risk_rules.v0.1.yaml"
 
 
 @pytest.fixture(scope="module")

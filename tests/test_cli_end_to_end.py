@@ -16,7 +16,7 @@ def run_rank(tmp_path: Path) -> list[dict]:
             "rank",
             "--scanner", str(REPO_ROOT / "data/synthetic/day-06-scanner.csv"),
             "--context", str(REPO_ROOT / "data/synthetic/day-06-asset-context.csv"),
-            "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+            "--rules", str(REPO_ROOT / "config/risk_rules.v0.1.yaml"),
             "--out", str(out),
         ]
     )
@@ -76,7 +76,7 @@ DAY08_ARGS = [
 
 def run_day08(tmp_path: Path, rules: Path | None = None) -> list[dict]:
     out = tmp_path / "ranked.csv"
-    rules = rules or REPO_ROOT / "config/risk_rules.yaml"
+    rules = rules or REPO_ROOT / "config/risk_rules.v0.1.yaml"
     assert main(["rank", *DAY08_ARGS, "--rules", str(rules), "--out", str(out)]) == 0
     with out.open(encoding="utf-8", newline="") as stream:
         return list(csv.DictReader(stream))
@@ -103,7 +103,7 @@ def test_day08_snapshots_override_hand_filled_and_fill_blank(tmp_path):
 
 def test_day08_preferring_v40_moves_router_into_high(tmp_path):
     rules = tmp_path / "rules40.yaml"
-    text = (REPO_ROOT / "config/risk_rules.yaml").read_text(encoding="utf-8")
+    text = (REPO_ROOT / "config/risk_rules.v0.1.yaml").read_text(encoding="utf-8")
     assert '["3.1", "4.0"]' in text
     rules.write_text(text.replace('["3.1", "4.0"]', '["4.0", "3.1"]'), encoding="utf-8")
 
@@ -128,7 +128,7 @@ def run_derive_context(tmp_path: Path, extra: list[str] | None = None) -> int:
         "--assets", str(NORTHSTAR / "assets.csv"),
         "--controls", str(NORTHSTAR / "controls.csv"),
         "--business", str(NORTHSTAR / "business_context.csv"),
-        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--rules", str(REPO_ROOT / "config/risk_rules.v0.1.yaml"),
         "--as-of", "2026-09-24",
         "--out", str(tmp_path / "asset_context.csv"),
     ] + (extra or []))
@@ -150,7 +150,7 @@ def test_derive_context_output_feeds_rank_without_needs_context(tmp_path):
         "rank",
         "--scanner", str(NORTHSTAR / "scanner.csv"),
         "--context", str(tmp_path / "asset_context.csv"),
-        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--rules", str(REPO_ROOT / "config/risk_rules.v0.1.yaml"),
         "--snapshots", str(REPO_ROOT / "data/snapshots/nvd"),
         "--out", str(out),
     ]) == 0
@@ -171,7 +171,7 @@ def test_derive_context_fails_loudly_when_business_rows_are_missing(tmp_path):
         "--assets", str(NORTHSTAR / "assets.csv"),
         "--controls", str(NORTHSTAR / "controls.csv"),
         "--business", str(thin),
-        "--rules", str(REPO_ROOT / "config/risk_rules.yaml"),
+        "--rules", str(REPO_ROOT / "config/risk_rules.v0.1.yaml"),
         "--as-of", "2026-09-24",
         "--out", str(tmp_path / "out.csv"),
     ])

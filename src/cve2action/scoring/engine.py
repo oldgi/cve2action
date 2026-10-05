@@ -17,7 +17,15 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from ..models import DECISION_NEEDS_CONTEXT, DECISION_SCORED, OUTPUT_COLUMNS, RiskRules
+from ..models import (
+    ADDITIVE,
+    DECISION_NEEDS_CONTEXT,
+    DECISION_SCORED,
+    GEOMETRIC,
+    GEOMETRIC_FLOOR,
+    OUTPUT_COLUMNS,
+    RiskRules,
+)
 from ..normalization.control import parse_attack
 from ..normalization.exposure import derive_control_effectiveness
 from ..normalization.threat import derive_threat
@@ -100,6 +108,7 @@ def explain_finding(
     kev: KevCatalog | None = None,
     controls: list[dict[str, Any]] | None = None,
     as_of: date | None = None,
+    path_score: float | None = None,
 ) -> Explanation:
     """對單筆 finding 評分，回傳結構化的 Explanation。
 
@@ -228,8 +237,24 @@ def explain_finding(
         source=str(context.get("business_source", "asset_context")),
         detail=str(context["business_criticality"]),
     ))
+    if path_score is not None:
+        factors.append(Factor(
+            key="path", value=float(path_score), weight=weights.get("path", 0.0),
+            inputs={"a": float(path_score)}, source="attack_graph",
+            detail="攻擊路徑分數 A（藍圖 §9.3）",
+        ))
+    elif "path" in weights:
+        # 沒有路徑分數時整項移除，權重退回 exposure——兩者講的是同一件事的兩個尺度：
+        # exposure 是「這台暴露多少」，path 是「從外面走得到嗎」。
+        for factor in factors:
+            if factor.key == "exposure":
+                factors[factors.index(factor)] = Factor(
+                    key=factor.key, value=factor.value,
+                    weight=factor.weight + weights["path"], inputs=factor.inputs,
+                    source=factor.source, detail=factor.detail)
+                break
 
-    score = round(10.0 * sum(f.weight * f.value for f in factors), 2)
+    score = _combine(factors, rules)
     fields["effective_exposure"] = exposure
     fields["priority_score"] = score
     band = rules.band_object_for(score)
@@ -242,9 +267,28 @@ def explain_finding(
         asset=str(finding.get("asset", "")), cve=str(finding.get("cve", "")),
         decision=DECISION_SCORED, factors=tuple(factors), score=score,
         band=fields["priority"], tier=band.tier, action=band.action,
-        degraded=threat is None, extras=fields,
+        degraded=threat is None, form=getattr(rules, "form", ADDITIVE), extras=fields,
     )
 
+
+
+def _combine(factors: list[Factor], rules: RiskRules) -> float:
+    """把因子合成分數。形式由 `risk_rules.yaml` 的 `form` 決定（Day 23）。
+
+    `additive` 是加權算術平均（v0.1 以來的 baseline）。
+    `geometric` 是藍圖 §9.5 的加權幾何平均——指數和為 1，所以它是平均數不是乘法；
+    它要求因子是比例尺度，而我們的 E、B 是序數標籤，這個落差記在 ADR-day-23。
+    """
+    if getattr(rules, "form", ADDITIVE) != GEOMETRIC:
+        return round(10.0 * sum(f.weight * f.value for f in factors), 2)
+
+    product = 1.0
+    for factor in factors:
+        # 幾何平均碰到 0 會整體歸零。下限與藍圖 §9.5 的 max(A, 0.05) 同一個數：
+        # 「查無」不等於「證明沒有」，不給它歸零的權力。
+        value = max(float(factor.value), GEOMETRIC_FLOOR)
+        product *= value ** factor.weight
+    return round(10.0 * product, 2)
 
 def row_from(explanation: Explanation) -> dict[str, Any]:
     """把 Explanation 投影成 ranked_result 的一列。reason 同樣由它產生。"""
@@ -267,6 +311,7 @@ def rank_explained(
     kev: KevCatalog | None = None,
     controls: list[dict[str, Any]] | None = None,
     as_of: date | None = None,
+    path_scores: dict[str, float] | None = None,
 ) -> list[Explanation]:
     """全部評分後排序，回傳 Explanation：SCORED 依分數降冪在前，NEEDS_CONTEXT 在最後。
 
@@ -283,6 +328,7 @@ def rank_explained(
             kev,
             controls,
             as_of,
+            (path_scores or {}).get(str(f.get("asset"))),
         )
         for f in findings
     ]

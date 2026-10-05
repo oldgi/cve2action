@@ -88,12 +88,18 @@ def _steps(graph: AttackGraph, asset: str, gated: bool = True) -> list[Hop]:
 
 
 def find_paths(graph: AttackGraph, target: str, source: str = INTERNET_ID,
-               max_hops: int = 8, gated: bool = True) -> list[Path]:
+               max_hops: int = 8, gated: bool = True,
+               without: frozenset[str] = frozenset()) -> list[Path]:
     """列出 source 到 target 的所有簡單路徑（不重複造訪同一台）。
 
     依跳數由短到長排序。長度相同時依沿途資產名稱排序——**排序必須是決定性的**，
     否則同樣的資料每次跑出不同的「最短路徑」，截圖與文章就對不起來。
+
+    `without` 把這些資產當成不存在，用來回答「修掉它之後還剩幾條」（Day 24）。
+    終點本身被排除時回空集合——目標不在了，當然沒有路徑通往它。
     """
+    if target in without:
+        return []
     results: list[Path] = []
 
     def walk(current: str, seen: tuple[str, ...], hops: tuple[Hop, ...]) -> None:
@@ -103,7 +109,7 @@ def find_paths(graph: AttackGraph, target: str, source: str = INTERNET_ID,
             results.append(Path(hops, source))
             return
         for hop in _steps(graph, current, gated):
-            if hop.target in seen:
+            if hop.target in seen or hop.target in without:
                 continue
             walk(hop.target, seen + (hop.target,), hops + (hop,))
 
@@ -113,7 +119,13 @@ def find_paths(graph: AttackGraph, target: str, source: str = INTERNET_ID,
 
 
 def shared_hops(paths: list[Path]) -> dict[str, int]:
-    """每個中間節點出現在幾條路徑上——Day 24 的 choke point 就是這個數字。"""
+    """每個中間節點出現在幾條路徑上。
+
+    **這不是 choke point。** 這個 docstring 原本寫著「Day 24 的 choke point 就是
+    這個數字」，Day 24 的第一件事就是推翻它：出現頻率回答「它在多少條路上」，
+    不回答「修掉它能擋掉多少條」，而兩者在 Northstar 上給出不同的第一名。
+    真正的瓶頸分析在 `choke.py`。
+    """
     counts: dict[str, int] = {}
     for path in paths:
         for asset in path.assets[1:-1]:
@@ -128,6 +140,10 @@ class PathContext:
     findings: dict[str, list[str]] = field(default_factory=dict)  # asset -> [CVE]
     crown_jewels: frozenset[str] = frozenset()
     siblings: int = 0  # 還有幾條路徑共用這條路上的節點
+    # 每一跳落地後能取得的權限（Day 21 的 Obtainable）。§16 的 Day 24 門檻要求
+    # 「能呈現入口、弱點、權限與 Crown Jewel 的有效路徑」——前三樣 Day 22 就有了，
+    # 權限一直只進了分數、沒進呈現。
+    privileges: dict[str, object] = field(default_factory=dict)  # asset -> Obtainable
 
 
 def render_path(path: Path, graph: AttackGraph, context: PathContext | None = None) -> str:
@@ -143,6 +159,15 @@ def render_path(path: Path, graph: AttackGraph, context: PathContext | None = No
         cves = context.findings.get(hop.target, [])
         if cves:
             lines.append(f"              漏洞：{'、'.join(cves)}")
+        obtainable = context.privileges.get(hop.target)
+        if obtainable is not None and hop.kind == NETWORK:
+            # 網路跳的「權限」是打進去之後取得什麼；身分跳的權限已經寫在 hop.detail。
+            # 證不出來就寫證不出來——不猜一個中間值（Day 21）。
+            if getattr(obtainable, "proven", False):
+                lines.append(f"              取得權限：{obtainable.level}"
+                             f"（{obtainable.detail}）")
+            else:
+                lines.append("              取得權限：證不出來——不代表拿不到")
     summary = f"{path.length} 跳"
     exploitable = sum(1 for h in path.hops if context.findings.get(h.target))
     if exploitable:

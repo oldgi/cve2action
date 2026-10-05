@@ -19,7 +19,7 @@ from cve2action.normalization.control import (
 from cve2action.normalization.exposure import derive_control_effectiveness
 from cve2action.rules import RulesError, load_rules
 
-RULES_PATH = "config/risk_rules.yaml"
+RULES_PATH = "config/risk_rules.v0.1.yaml"
 AS_OF = date(2026, 9, 24)
 
 ZEROLOGON = "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:H/A:H"

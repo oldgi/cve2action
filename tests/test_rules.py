@@ -8,7 +8,7 @@ import yaml
 from cve2action.rules import RulesError, load_rules
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-RULES_PATH = REPO_ROOT / "config" / "risk_rules.yaml"
+RULES_PATH = REPO_ROOT / "config" / "risk_rules.v0.1.yaml"
 
 
 def load_raw() -> dict:

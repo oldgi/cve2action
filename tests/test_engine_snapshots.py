@@ -9,7 +9,10 @@ from cve2action.models import DECISION_NEEDS_CONTEXT, DECISION_SCORED
 from cve2action.normalization.cvss import CvssSet, make_score
 from cve2action.rules import load_rules
 
-RULES = load_rules(Path(__file__).resolve().parents[1] / "config" / "risk_rules.yaml")
+# Day 5–18 的基準用 **v0.1 凍結版**規則：那些數字是已發表文章的依據，
+# 必須永遠重現得出來。production 設定（config/risk_rules.yaml）自 Day 23 起
+# 多了路徑項，分數因此不同——那是預期的，不是回歸。
+RULES = load_rules(Path(__file__).resolve().parents[1] / "config" / "risk_rules.v0.1.yaml")
 CTX = {"asset": "A", "environment": "PROD", "reachability": "INTERNET",
        "control_effectiveness": "NONE", "business_criticality": "CRITICAL"}
 V31 = "CVSS:3.1/AV:A/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:H"

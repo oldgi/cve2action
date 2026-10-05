@@ -32,7 +32,10 @@ from cve2action.scoring import (
 
 ROOT = Path(__file__).resolve().parents[1]
 NORTHSTAR = ROOT / "data/synthetic/northstar"
-RULES = load_rules(ROOT / "config/risk_rules.yaml")
+# Day 5–18 的基準用 **v0.1 凍結版**規則：那些數字是已發表文章的依據，
+# 必須永遠重現得出來。production 設定（config/risk_rules.yaml）自 Day 23 起
+# 多了路徑項，分數因此不同——那是預期的，不是回歸。
+RULES = load_rules(ROOT / "config/risk_rules.v0.1.yaml")
 AS_OF = date(2026, 9, 24)
 
 CTX = {"environment": "PROD", "reachability": "INTERNET",
@@ -177,7 +180,7 @@ def _explain_argv(*extra: str) -> list[str]:
         "explain",
         "--scanner", str(NORTHSTAR / "scanner.csv"),
         "--context", str(NORTHSTAR / "asset_context.csv"),
-        "--rules", str(ROOT / "config/risk_rules.yaml"),
+        "--rules", str(ROOT / "config/risk_rules.v0.1.yaml"),
         "--snapshots", str(ROOT / "data/snapshots/nvd"),
         "--epss", str(ROOT / "data/snapshots/epss"),
         "--kev", str(ROOT / "data/snapshots/kev"),
