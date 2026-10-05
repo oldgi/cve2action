@@ -43,8 +43,8 @@ POLICY_HEADER = ["policy_id", "source_scope", "destination", "port", "action", "
 # 刻意**以 (asset_id, cve) 為鍵**，不靠服務名 join——Day 21 已經證明名字對不起來
 # （服務名只對得上 15/40）。「這個 CVE 該看哪個產品的版本」是人的判斷，
 # 寫進資料裡看得見、審得到，比埋在比對規則裡安全。
-VERSION_EVIDENCE_HEADER = ["asset_id", "cve", "product", "version", "source",
-                           "verified_at", "notes"]
+VERSION_EVIDENCE_HEADER = ["asset_id", "cve", "product", "cpe_product", "version",
+                           "source", "verified_at", "notes"]
 # Day 25／藍圖 §9.6：「任何 P0/P1 降級都必須留下原因、核准人與有效期限。」
 # 這是那句話的載體。沒有這一列，就沒有人可以把一筆 finding 降下來。
 RISK_ACCEPTANCE_HEADER = ["acceptance_id", "asset", "cve", "status", "reason",
@@ -342,41 +342,46 @@ SCANNER_STALE = {("NS-JUMP-01", "CVE-2019-0708"): "9.9"}
 #   banner                                        —— 服務自己報的，**不能定案**
 #                                                    （發行版回溯修補時 banner 不會變）
 #   manual                                        —— 人工確認，要看 verified_at 新不新
+#
+# `cpe_product` 是**我們認定這台裝的東西在 NVD 裡叫什麼**。它必須寫出來，不能靠
+# 名字比對猜：apache-httpd 在 CPE 裡叫 http_server、Confluence 分 confluence_server
+# 與 confluence_data_center 兩個產品、windows-server 要連版號一起變成
+# windows_server_2019。猜錯的後果不是漏判，是**誤判成不必修**。
 VERSION_EVIDENCE = [
     # --- 版本落在受影響範圍內：APPLICABLE，該修 -----------------------------
-    ("NS-WEB-PORTAL-01", "CVE-2021-41773", "apache-httpd", "2.4.49", "package_manager",
+    ("NS-WEB-PORTAL-01", "CVE-2021-41773", "apache-httpd", "http_server", "2.4.49", "package_manager",
      "2026-09-18", "CPE 只列 2.4.49 這一版，剛好命中"),
-    ("NS-WEB-PORTAL-02", "CVE-2021-41773", "apache-httpd", "2.4.49", "package_manager",
+    ("NS-WEB-PORTAL-02", "CVE-2021-41773", "apache-httpd", "http_server", "2.4.49", "package_manager",
      "2026-09-18", "與 PORTAL-01 同一個映像檔"),
-    ("NS-VPN-GW-01", "CVE-2024-21762", "fortios", "6.0.4", "vendor_portal",
+    ("NS-VPN-GW-01", "CVE-2024-21762", "fortios", "fortios", "6.0.4", "vendor_portal",
      "2026-09-20", "受影響 6.0.0–6.0.18"),
-    ("NS-VPN-GW-01", "CVE-2018-13379", "fortios", "6.0.4", "vendor_portal",
+    ("NS-VPN-GW-01", "CVE-2018-13379", "fortios", "fortios", "6.0.4", "vendor_portal",
      "2026-09-20", "受影響 6.0.0–6.0.5；同一台同時中兩個"),
-    ("NS-EDGE-RTR-01", "CVE-2023-20198", "ios-xe", "17.6.1", "vendor_portal",
+    ("NS-EDGE-RTR-01", "CVE-2023-20198", "ios-xe", "ios_xe", "17.6.1", "vendor_portal",
      "2026-09-20", "受影響 17.6–17.6.6a"),
-    ("NS-APP-INTRANET-01", "CVE-2023-22515", "confluence", "8.5.1", "agent_inventory",
+    ("NS-APP-INTRANET-01", "CVE-2023-22515", "confluence", "confluence_server", "8.5.1", "agent_inventory",
      "2026-09-19", "受影響 8.5.0–8.5.2"),
-    ("NS-LAB-CONFLUENCE-01", "CVE-2022-26134", "confluence", "7.13.0", "agent_inventory",
+    ("NS-LAB-CONFLUENCE-01", "CVE-2022-26134", "confluence", "confluence_server", "7.13.0", "agent_inventory",
      "2026-09-19", "受影響 7.13.0–7.13.7"),
-    ("NS-APP-REPORT-01", "CVE-2020-1938", "tomcat", "9.0.30", "package_manager",
+    ("NS-APP-REPORT-01", "CVE-2020-1938", "tomcat", "tomcat", "9.0.30", "package_manager",
      "2026-09-18", "受影響 9.0.0–9.0.31"),
-    ("NS-AD-DC-01", "CVE-2020-1472", "windows-server", "2019", "agent_inventory",
+    ("NS-AD-DC-01", "CVE-2020-1472", "windows-server", "windows_server_2019", "2019", "agent_inventory",
      "2026-09-17", "CPE 列 windows_server_2019"),
 
     # --- 版本落在範圍外：NOT_APPLICABLE，不必修 ------------------------------
     # 這是今天唯一「最便宜的處置」真的成立的一筆。注意量的是**作業系統**版本，
     # 不是 services.csv 裡那個 rdp 10.0——協定版本答不了這個 CVE 的問題。
-    ("NS-JUMP-01", "CVE-2019-0708", "windows-server", "2019", "agent_inventory",
+    ("NS-JUMP-01", "CVE-2019-0708", "windows-server", "windows_server_2019", "2019", "agent_inventory",
      "2026-09-17", "CPE 只列 windows_7／windows_server_2008／2008_r2；2019 不在其中"),
 
     # --- 證據拿得出來，但定不了案：REVIEW_REQUIRED ---------------------------
-    ("NS-FILE-SRV-01", "CVE-2018-15919", "openssh", "7.4p1", "banner",
+    ("NS-FILE-SRV-01", "CVE-2018-15919", "openssh", "openssh", "7.4p1", "banner",
      "2026-09-21", "受影響 5.9–7.8，看起來命中——但這是 banner，發行版回溯修補後它不會變"),
-    ("NS-APP-BILLING-01", "CVE-2023-34362", "moveit-transfer", "15.0.1", "manual",
+    ("NS-APP-BILLING-01", "CVE-2023-34362", "moveit-transfer", "moveit_transfer", "15.0.1", "manual",
      "2026-09-15", "15.0.x 是 moveit_cloud 的編號；CPE 的 moveit_transfer 用 2021.x／2022.x，兩套編號對不起來"),
-    ("NS-MAIL-GW-01", "CVE-2021-26855", "exchange-server", "15.2.792", "agent_inventory",
+    ("NS-MAIL-GW-01", "CVE-2021-26855", "exchange-server", "exchange_server", "15.2.792", "agent_inventory",
      "2026-09-16", "15.2.x 是 Exchange 2019；CPE 以 2013／2016／2019 加 CU 編號表示，數字版本對不上去"),
-    ("NS-PLC-DC-ENV", "CVE-2024-6242", "controllogix", "32.011", "manual",
+    ("NS-PLC-DC-ENV", "CVE-2024-6242", "controllogix", "controllogix", "32.011", "manual",
      "2026-08-02", "NVD 這筆 configurations 是空的——沒有範圍可比，而且這份人工紀錄也過期了"),
 ]
 

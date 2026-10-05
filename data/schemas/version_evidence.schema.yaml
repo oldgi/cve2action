@@ -20,6 +20,16 @@ columns:
     required: true
     blank_ok: false
     note: 被量的是哪個東西。不必等於 services.csv 的 service。
+  - name: cpe_product
+    required: true
+    blank_ok: false
+    note: >
+      我們認定這台裝的東西在 NVD 的 CPE 裡叫什麼。**必須寫出來，不能靠名字比對猜**：
+      apache-httpd 在 CPE 裡叫 http_server、Confluence 分 confluence_server 與
+      confluence_data_center 兩個產品、windows-server 要連版號變成
+      windows_server_2019。猜錯的後果不是漏判，是誤判成不必修。
+      閘門唯一能掙得 NOT_APPLICABLE 的方式，就是這個值不在該 CVE 的受影響產品集合裡
+      （而且那個集合不是空的）。
   - name: version
     required: true
     blank_ok: false

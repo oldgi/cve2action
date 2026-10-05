@@ -342,8 +342,17 @@ CI 的 `calibrate` 與 `acceptance` 都必須餵攻擊圖輸入（`--assets/--in
   （`find_paths(without=)`、`choke.analyse`）：移除一台之後還剩幾條路徑算得出來，
   但分數不會跟著重算。那要有成本模型才有意義，留給 Day 26–27。
 - 評分門檻與人工排序校準（Day 17–18）。
-- 資產歸併（多 IP → 同一 asset）、漏洞適用性閘門（藍圖 §9.0；目前假設 scanner.csv 已是歸併後結果）。
-- 控制與弱點類別的對應（目前 AV/PR 判斷不了協定層，例如 WAF 對 TLS 層的 RC4 降級）。
+- ~~漏洞適用性閘門（藍圖 §9.0 閘門 2）~~ **已完成（Day 25）**，見
+  [ADR-day-25](../decisions/ADR-day-25-applicability-gate.md)。
+- 資產歸併（多 IP → 同一 asset）：目前假設 `scanner.csv` 已是歸併後結果。
+- **控制與弱點類別的對應**（AV/PR 判斷不了協定層，例如 WAF 對 TLS 層的 RC4 降級
+  仍被判為 `APPLICABLE`，那個折減站不住）。**已知且尚未排程**：
+  [Day 15 文章](../articles/day-15.md) 當時寫「留給 Day 25」，但 Day 25 做的是
+  §9.0 閘門 2 的**版本**適用性，不是控制與弱點類別的對應——是兩個不同的問題，
+  已發表的那句承諾沒有兌現。**已排為番外篇二，與 Day 25 同日發表**（藍圖 §9.6 註記）。
+  缺的那條軸線已經在資料裡：NVD 快照的 `raw.weaknesses` 帶 CWE（30 個 CVE 裡 26 個有），
+  而 `extracted` 投影從來沒取出來。實況：9 筆折減裡有 **2 筆站不住**，
+  都是 WAF 對 TLS 層（`CVE-2013-2566` CWE-326/327、`CVE-2016-2107` CWE-310）。
 - ~~攻擊路徑、圖形模型、Choke Point（Day 19–24）~~ **已完成**。
   路徑分數 `A` 已進公式（§3.3）；瓶頸分析見
   [ADR-day-24](../decisions/ADR-day-24-choke-point.md)。
