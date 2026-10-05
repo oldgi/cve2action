@@ -104,6 +104,14 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 > §9.5 的幾何平均形式已於 Day 23 實作並比較，結論是採用加權相加（見 §9.5 註記）。
 > 該條在 Day 28／29 實作時以「本專案排名」理解。
 
+> **Day 24 補充盤點（2026-10-08）**：上表只盤了十一條成功標準，**沒有盤 §9 的規則**。
+> 這次補查發現 **§9.6 的三條規則覆寫沒有實作，也沒有排在任何一天**——
+> 其中第三條（`REVIEW_REQUIRED`）靠成功標準 #3 間接排進了 Day 25，
+> 另外兩條（至少 P0、至少 P1）則是誰都沒有負責。已排入 **Day 25**，見 §9.6 註記。
+>
+> 教訓跟 Day 18 那次盤點一樣：**只盤成功標準盤不到規格裡的規則。**
+> 成功標準寫的是「做得到什麼」，§9 寫的是「必須怎麼算」，兩者不互相涵蓋。
+
 
 ## 6. 最終系統架構
 
@@ -288,6 +296,35 @@ CRPS=100\times L^{0.45}\times I^{0.35}\times \max(A,0.05)^{0.20}\times(1-0.6C)
 
 分數不取代人工決策。任何 P0/P1 降級都必須留下原因、核准人與有效期限。
 
+> **Day 24 註記（2026-10-08）：本節排入 Day 25。**
+>
+> 這三條規則到 Day 24 為止**都沒有實作，而且 §10 原本沒有任何一天負責它們**。
+> [ADR-day-18（二）](docs/decisions/ADR-day-18-crps-tier-mapping.md) 當時接上
+> `tier`（P0–P3）就是為了讓這一節寫得出來，但「寫得出來」不等於「寫了」——
+> 這是 Day 24 一致性盤點才查出來的缺口，不是刻意的非目標。
+>
+> 三條規則的輸入現在都齊了：
+>
+> | 規則 | 需要什麼 | 從哪一天起有 |
+> |---|---|---|
+> | ① 至少 P0 | KEV 收錄；Internet 可達；存在有效路徑 | `threat_source`（Day 14）＋ `A_Reachability`（Day 23） |
+> | ② 至少 P1 | 一條通往 Crown Jewel、且不需既有權限的路徑 | 身分邊前提三態（Day 21）＋ 路徑搜尋（Day 22） |
+> | ③ `REVIEW_REQUIRED` | 哪些輸入算「關鍵」要先定義 | 第三條**本來就排在 Day 25** |
+>
+> 第三條已經在 Day 25 的那一列，所以另外兩條排同一天不是硬塞：
+> 三條都是 `tier` 層的結論，共用同一套機制與同一份 ADR。
+>
+> **兩個前置缺口**（Day 25 開工前要補）：
+>
+> 1. 「可無需既有權限」需要一個明確定義。目前的作法是看路徑是不是只由網路跳組成；
+>    但 Day 21 的 `UNPROVEN`（不能證明走不通就當走得通）會讓這個判斷偏保守，
+>    而偏保守在這裡是**往上覆寫**，方向正確但要寫清楚。
+> 2. P0/P1 降級的原因／核准人／有效期限**沒有載體**。
+>    `data/synthetic/day-02-findings.csv` 有現成的欄位契約
+>    （`risk_acceptance_status`／`_ref`／`_approver`／`_valid_until`），
+>    但現行的 `data/synthetic/northstar/scanner.csv` 只有四欄，不帶這些資訊。
+>    Day 25 要嘛把欄位接進 Northstar，要嘛明寫這一條延後並說明理由。
+
 ### 9.6 Day 5 baseline：先用最小 Decision Rule 跑通
 
 Day 5 決定先以 0–10 的 Contextual Priority Score 建立 Decision Engine v0.1：
@@ -330,7 +367,7 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 | 22 | 從 Internet 找到最短入侵路徑 | Path Finder | 找到並呈現一條路徑 |
 | 23 | 不是路徑愈短就一定愈危險 | Attack Path Score ＋ **公式形式決策** | ✅ 路徑條件以第五項 `A` 進入分數（§9.3 四項）；兩種形式都實作並各跑一次，**採用加權相加**（tau 相同 0.6、幾何平均在 `attributable` 上 0/37），[ADR-day-23](docs/decisions/ADR-day-23-formula-form.md)。同時修掉門檻自己的三個缺陷：`explainable` 從不檢查分解重建、缺少 `attributable`、`revisit_on` 不是可檢查的日期 |
 | 24 | 找出通往 Crown Jewel 的共同瓶頸 | Choke Point | ✅ 瓶頸改以**反事實**定義（移除後重算），不用出現頻率——兩者第一名不同。`NS-JUMP-01` 出現在四個 Crown Jewel 的每一個最小切割集合裡；單點瓶頸不存在（各需 ≥2 台）；切斷數不可相加。路徑呈現補上權限，§16 四項齊備。[ADR-day-24](docs/decisions/ADR-day-24-choke-point.md) |
-| 25 | 修漏洞不是唯一選項 | Remediation Model ＋ **適用性閘門** | 支援 Patch 與補償控制；**處置結果新增 `NOT_APPLICABLE` 與 `REVIEW_REQUIRED` 兩種第一級結論，由版本證據支撐——最便宜的處置是證明它根本不適用**（§9.0 閘門 2、成功標準 #3；需 `version_evidence.csv`）|
+| 25 | 修漏洞不是唯一選項 | Remediation Model ＋ **適用性閘門** ＋ **§9.6 規則覆寫** | 支援 Patch 與補償控制；**處置結果新增 `NOT_APPLICABLE` 與 `REVIEW_REQUIRED` 兩種第一級結論，由版本證據支撐——最便宜的處置是證明它根本不適用**（§9.0 閘門 2、成功標準 #3；需 `version_evidence.csv`）。**同日實作 §9.6 的三條覆寫規則**（Day 24 盤點後補排，見下方註記）：①KEV＋Internet 可達＋有效攻擊路徑 → 至少 P0；②可無需既有權限通往 Crown Jewel → 至少 P1；③關鍵輸入缺失 → `REVIEW_REQUIRED`（本來就在這一列）。驗收：覆寫**只能升級不得降級**（UNKNOWN 不得降低風險的延伸）、每次覆寫留下觸發的是哪一條與憑哪些事實、P0/P1 降級須有原因／核准人／有效期限的載體 |
 | 26 | Patch、隔離、關閉服務，哪一個先做？ | Candidate Engine | 每項措施有成本與限制 |
 | 27 | 用最少變更切斷最多攻擊路徑 | Remediation ROI | 比較投入與降低幅度 |
 | 28 | 做一個主管與工程師都看得懂的儀表板 | Dashboard | 排序、說明、路徑可操作；**同一畫面並陳 CVSS 排名與本專案排名兩欄**（成功標準 #5）|
