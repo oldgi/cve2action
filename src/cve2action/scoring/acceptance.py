@@ -18,12 +18,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from ..models import DECISION_SCORED
+from ..models import DECISION_SCORED, GEOMETRIC_FLOOR
 
 STRUCTURAL = "structural"
 EMPIRICAL = "empirical"
@@ -44,26 +45,39 @@ class Check:
     threshold: Any
     detail: str = ""
     waiver: dict[str, Any] | None = None
+    # 豁免的 revisit_on 已經過了（Day 23）：過期的豁免不是豁免
+    expired: bool = False
 
     @property
     def waived(self) -> bool:
-        return not self.passed and self.waiver is not None
+        return not self.passed and self.waiver is not None and not self.expired
 
     @property
     def blocking(self) -> bool:
-        return not self.passed and self.waiver is None
+        return not self.passed and (self.waiver is None or self.expired)
 
     @property
     def status(self) -> str:
         if self.passed:
             return "PASS"
-        return "WAIVED" if self.waived else "FAIL"
+        if self.waived:
+            return "WAIVED"
+        return "EXPIRED" if self.expired else "FAIL"
 
 
 @dataclass(frozen=True)
 class Acceptance:
     checks: tuple[Check, ...]
+    # 門檻檔宣告適用的 rules 版本
     rules_version: str
+    # 這次實際載入的 rules 版本；兩者不同要出聲（Day 23）
+    measured_version: str = ""
+    # 判斷豁免過期所用的日期
+    today: date | None = None
+
+    @property
+    def version_mismatch(self) -> bool:
+        return bool(self.measured_version) and self.measured_version != self.rules_version
 
     @property
     def blocking(self) -> tuple[Check, ...]:
@@ -95,6 +109,15 @@ def load_criteria(path: str | Path) -> dict[str, Any]:
     for waiver in raw.get("waivers") or []:
         if waiver.get("id") not in seen:
             raise AcceptanceError(f"{path}: waiver for unknown criterion {waiver.get('id')!r}")
+        revisit = str(waiver.get("revisit_on", "")).strip()
+        try:
+            date.fromisoformat(revisit)
+        except ValueError:
+            raise AcceptanceError(
+                f"{path}: waiver {waiver.get('id')!r} 的 revisit_on 是 {revisit!r}——"
+                "到期日必須是 ISO 日期（YYYY-MM-DD）。寫『Day 20』看起來像承諾，"
+                "但沒有任何程式能判斷它過了沒有"
+            ) from None
         for field in ("reason", "revisit_on"):
             if not str(waiver.get(field, "")).strip():
                 raise AcceptanceError(
@@ -115,6 +138,19 @@ def _probe(rules, cvss: float, reach: str, control: str, business: str) -> dict:
          "control_effectiveness": control, "business_criticality": business},
         rules,
     )
+
+
+def _combine_values(pairs: list[tuple[float, float]], rules) -> float:
+    """按 rules 宣告的形式把 (權重, 值) 合成分數。
+
+    探針不能自己寫死加號——Day 18 的版本就寫死了，於是它在幾何平均下比的是
+    一個根本不存在的數字，而且照樣 PASS。
+    """
+    from .engine import _combine
+    from .explain import Factor
+
+    return _combine([Factor(key=f"p{i}", value=v, weight=w, source="probe")
+                     for i, (w, v) in enumerate(pairs)], rules)
 
 
 def _check_bands_reachable(rules) -> tuple[bool, Any, str]:
@@ -145,9 +181,9 @@ def _check_degradation_safe(rules) -> tuple[bool, Any, str]:
                 problems.append(f"UNKNOWN<{none} at {reach}/{business}")
     # 無威脅資料時權重退回 severity，分數不得低於威脅為 0 時的假想值
     degraded = _probe(rules, 9.8, "INTERNET", "NONE", "CRITICAL")["priority_score"]
-    pretend_zero = round(10 * (rules.weights["severity"] * 0.98
-                               + rules.weights["exposure"] * 1.0
-                               + rules.weights["business"] * 1.0), 2)
+    pretend_zero = _combine_values(
+        [(rules.weights["severity"], 0.98), (rules.weights["threat"], 0.0),
+         (rules.weights["exposure"], 1.0), (rules.weights["business"], 1.0)], rules)
     if degraded < pretend_zero:
         problems.append(f"缺威脅資料 {degraded} < 補零 {pretend_zero}")
     return not problems, len(problems), "; ".join(problems) or "缺資料從不換來較低的分數"
@@ -197,13 +233,13 @@ def _measure(rows: list[dict], explanations) -> dict[str, tuple[float, str]]:
     span = max(scores) - min(scores)
     ceiling = sum(1 for s in scores if s >= 10.0)
 
-    complete = sum(
-        1 for e in explanations
-        if e.decision == DECISION_SCORED and len(e.factors) >= 3
-        and all(f.source for f in e.factors)
-    )
+    complete = sum(1 for e in explanations if _explains(e))
+    attributable, pairs = _attributable(explanations)
     return {
-        "explainable": (round(complete / total, 4), f"{complete}/{total} 筆有完整分解與來源"),
+        "explainable": (round(complete / total, 4),
+                        f"{complete}/{total} 筆有完整分解、有來源，且分解重建得出分數"),
+        "attributable": (round(attributable / pairs, 4) if pairs else 0.0,
+                         f"{attributable}/{pairs} 組相鄰名次能逐項說明誰贏在哪一項"),
         "discrimination": (round(distinct / total, 4), f"{distinct} 個相異分數 / {total} 筆"),
         "band_balance": (round(biggest[1] / total, 4),
                          f"最大分級 {biggest[0]} {biggest[1]}/{total}"),
@@ -213,6 +249,46 @@ def _measure(rows: list[dict], explanations) -> dict[str, tuple[float, str]]:
     }
 
 
+def _explains(e) -> bool:
+    """一筆說明是否完整：有分解、每項有來源，而且**分解重建得出分數**。
+
+    最後那一條是 Day 23 補的。Day 18 的版本只數因子個數與來源，所以當 Day 23 加入
+    第二種合成形式時，它照樣給滿分——一個加不回總分的分解也算「可解釋」。
+    門檻量錯東西比沒有門檻更危險，因為它會發綠燈。
+    """
+    if e.decision != DECISION_SCORED or len(e.factors) < 3:
+        return False
+    if not all(f.source for f in e.factors):
+        return False
+    score = e.score or 0.0
+    if e.additive:
+        rebuilt = sum(f.contribution for f in e.factors)
+    else:
+        rebuilt = 10.0
+        for f in e.factors:
+            rebuilt *= max(float(f.value), GEOMETRIC_FLOOR) ** f.weight
+    # 容差 0.1：各項 contribution 已各自四捨五入到小數兩位
+    return abs(rebuilt - score) <= 0.1
+
+
+def _attributable(explanations) -> tuple[int, int]:
+    """相鄰名次中，有幾組答得出「為什麼它排在我前面」。
+
+    這是 Day 16 當初做 `Explanation.gap_to` 的理由，原文是「排序是比較出來的，
+    單看一列的算式永遠答不了為什麼它在第三名而不是第二名」。Day 18 定八條門檻時
+    漏了它——於是這個專案最核心的對外承諾，是唯一沒有門檻看守的一條。
+    """
+    scored = [e for e in explanations if e.decision == DECISION_SCORED]
+    pairs = max(len(scored) - 1, 0)
+    ok = 0
+    for lower, upper in zip(scored[1:], scored, strict=False):
+        deltas = lower.gap_to(upper)
+        if deltas and abs(round(sum(d for _k, d in deltas), 2)
+                          - round(lower.score - upper.score, 2)) <= 0.1:
+            ok += 1
+    return ok, pairs
+
+
 STRUCTURAL_CHECKS = {
     "bands_reachable": _check_bands_reachable,
     "degradation_safe": _check_degradation_safe,
@@ -220,7 +296,9 @@ STRUCTURAL_CHECKS = {
 }
 
 
-def evaluate(criteria: dict[str, Any], rules, rows: list[dict], explanations) -> Acceptance:
+def evaluate(criteria: dict[str, Any], rules, rows: list[dict], explanations,
+             today: date | None = None) -> Acceptance:
+    today = today or date.today()
     waivers = {w["id"]: w for w in (criteria.get("waivers") or [])}
     measured = _measure(rows, explanations)
     checks: list[Check] = []
@@ -239,16 +317,26 @@ def evaluate(criteria: dict[str, Any], rules, rows: list[dict], explanations) ->
             threshold = float(entry["threshold"])
             passed = (value <= threshold if entry.get("direction") == AT_MOST
                       else value >= threshold)
+        waiver = None if passed else waivers.get(cid)
         checks.append(Check(
             id=cid, kind=kind, description=entry["description"], passed=passed,
             measured=value, threshold=entry["threshold"], detail=detail,
-            waiver=None if passed else waivers.get(cid),
+            waiver=waiver,
+            expired=waiver is not None
+            and date.fromisoformat(str(waiver["revisit_on"])) <= today,
         ))
-    return Acceptance(tuple(checks), str(criteria.get("applies_to_rules_version", "")))
+    return Acceptance(tuple(checks), str(criteria.get("applies_to_rules_version", "")),
+                      measured_version=str(getattr(rules, "version", "")), today=today)
 
 
 def report(acceptance: Acceptance) -> str:
-    lines = [f"評分門檻（rules {acceptance.rules_version}）", ""]
+    lines = [f"評分門檻（門檻檔適用 rules {acceptance.rules_version}；"
+             f"實際載入 {acceptance.measured_version or '未知'}）"]
+    if acceptance.version_mismatch:
+        lines.append(f"  ⚠ 版本不符：這組門檻是為 {acceptance.rules_version} 定的，"
+                     f"現在量的是 {acceptance.measured_version}。"
+                     "門檻與公式必須同時更新，否則量的是上一版的標準。")
+    lines.append("")
     for check in acceptance.checks:
         measured = (f"{check.measured:g}" if isinstance(check.measured, float)
                     else str(check.measured))
@@ -260,14 +348,20 @@ def report(acceptance: Acceptance) -> str:
         if check.waived:
             lines.append(f"            豁免至 {check.waiver['revisit_on']}："
                          f"{' '.join(check.waiver['reason'].split())[:80]}…")
+        elif check.expired:
+            lines.append(f"            豁免已於 {check.waiver['revisit_on']} 到期"
+                         f"（今天 {acceptance.today}）：到期的豁免不是豁免，"
+                         "要重新量測並重新說明，或者就去修。")
         lines.append("")
     passed = sum(1 for c in acceptance.checks if c.passed)
     lines.append(f"通過 {passed}/{len(acceptance.checks)}；"
                  f"豁免 {len(acceptance.waived)}；阻擋 {len(acceptance.blocking)}")
     if acceptance.accepted:
-        lines.append("v0.1 評分門檻：**通過**（含上述豁免，根因與重新量測日期已記錄）")
+        lines.append(f"rules {acceptance.measured_version or acceptance.rules_version} "
+                     "評分門檻：**通過**（含上述豁免，根因與重新量測日期已記錄）")
     else:
-        lines.append("v0.1 評分門檻：**未通過** —— 下列條件沒過也沒有 waiver：")
+        lines.append(f"rules {acceptance.measured_version or acceptance.rules_version} "
+                     "評分門檻：**未通過** —— 下列條件沒過，而且沒有（有效的）waiver：")
         for check in acceptance.blocking:
             lines.append(f"  - {check.id}")
     return "\n".join(lines)

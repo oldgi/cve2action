@@ -18,9 +18,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-# 符號與顯示順序；與開發規格 §3.1 的公式同序
-SYMBOLS = {"severity": "S", "threat": "T", "exposure": "E", "business": "B"}
-ORDER = ("severity", "threat", "exposure", "business")
+from ..models import ADDITIVE, GEOMETRIC, GEOMETRIC_FLOOR
+
+# 符號與顯示順序；與開發規格 §3.1 的公式同序。A 是藍圖 §9.3 的攻擊路徑分數（Day 23）
+SYMBOLS = {"severity": "S", "threat": "T", "exposure": "E", "business": "B", "path": "A"}
+ORDER = ("severity", "threat", "exposure", "business", "path")
 
 
 @dataclass(frozen=True)
@@ -36,11 +38,17 @@ class Factor:
 
     @property
     def symbol(self) -> str:
-        return SYMBOLS[self.key]
+        # 查不到就退回首字母大寫。多一個因子不該讓整個 CLI 掛掉——Day 23 加 path
+        # 的時候就是這樣掛的，而那是顯示用的查表，不是計算。
+        return SYMBOLS.get(self.key, self.key[:1].upper())
 
     @property
     def contribution(self) -> float:
-        """這一項貢獻了幾分（滿分 10）。"""
+        """這一項貢獻了幾分（滿分 10）。
+
+        **這個定義只在加權相加的形式下成立。** 幾何平均沒有逐項貢獻可言——
+        見 `Explanation.additive` 與 ADR-day-23。
+        """
         return round(10.0 * self.weight * self.value, 2)
 
     def share_of(self, score: float) -> float:
@@ -64,6 +72,8 @@ class Explanation:
     gaps: tuple[str, ...] = ()
     # 威脅項缺席、權重退回 severity 時為 True（開發規格 §3.2）
     degraded: bool = False
+    # 產生這個分數的合成形式（Day 23）：additive 或 geometric
+    form: str = ADDITIVE
     # 重建 reason 字串與輸出列所需、但不屬於任何因子的欄位
     extras: dict[str, Any] = field(default_factory=dict)
 
@@ -71,16 +81,35 @@ class Explanation:
     def scored(self) -> bool:
         return self.score is not None
 
+    @property
+    def additive(self) -> bool:
+        """分數是不是各項貢獻的和。
+
+        只有加權相加的形式答 True。這件事決定了三個投影能不能用：
+        `formula` 的算式形狀、`Factor.contribution` 的「貢獻幾分」、
+        以及 `gap_to` 的逐項差額——三者都預設「總分 = 各項之和」。
+        """
+        return self.form != GEOMETRIC
+
     def factor(self, key: str) -> Factor | None:
         return next((f for f in self.factors if f.key == key), None)
 
     @property
     def formula(self) -> str:
-        """代入數值後的算式，例如 10 × (0.35×1 + 0.15×1 + 0.25×0.6 + 0.25×1) = 9.0。"""
+        """代入數值後的算式，例如 10 × (0.35×1 + 0.15×1 + 0.25×0.6 + 0.25×1) = 9.0。
+
+        算式的**形狀**跟著 `form` 走。Day 16 把理由做成計算的投影，就是為了讓字串
+        不可能跟數字不一致；Day 23 加了第二種形式，這裡若還硬寫加號，
+        就等於把那條紀律自己打破一次。
+        """
         if not self.scored:
             return ""
-        terms = " + ".join(f"{f.weight:g}×{f.value:g}" for f in self.factors)
-        return f"10 × ({terms}) = {self.score:g}"
+        if self.additive:
+            terms = " + ".join(f"{f.weight:g}×{f.value:g}" for f in self.factors)
+            return f"10 × ({terms}) = {self.score:g}"
+        terms = " × ".join(
+            f"max({f.value:g},{GEOMETRIC_FLOOR:g})^{f.weight:g}" for f in self.factors)
+        return f"10 × {terms} = {self.score:g}"
 
     def gap_to(self, other: Explanation) -> list[tuple[str, float]]:
         """與另一筆的逐項分數差，依絕對值由大到小——回答「為什麼它排在我前面」。
@@ -88,6 +117,9 @@ class Explanation:
         只比較兩邊都有的因子；一邊有威脅項另一邊沒有時，缺席的那邊以 0 貢獻計入，
         差額才加得起來。
         """
+        if not (self.additive and other.additive):
+            # 幾何平均的總分差不等於逐項貢獻差之和，報出來的數字會加不回去。
+            return []
         keys = {f.key for f in self.factors} | {f.key for f in other.factors}
         deltas = []
         for key in ORDER:
@@ -111,6 +143,7 @@ class Explanation:
             "tier": self.tier,
             "action": self.action,
             "formula": self.formula,
+            "form": self.form,
             "degraded": self.degraded,
             "gaps": list(self.gaps),
             "factors": [
@@ -119,8 +152,8 @@ class Explanation:
                     "symbol": f.symbol,
                     "value": f.value,
                     "weight": f.weight,
-                    "contribution": f.contribution,
-                    "share": f.share_of(self.score or 0.0),
+                    "contribution": f.contribution if self.additive else None,
+                    "share": f.share_of(self.score or 0.0) if self.additive else None,
                     "inputs": f.inputs,
                     "source": f.source,
                 }
@@ -138,12 +171,15 @@ class Explanation:
         business = self.factor("business")
         threat_text = (f"T={threat.value:g} [{threat.source}]; " if threat is not None
                        else "T=n/a [no threat data, weight redistributed]; ")
+        path = self.factor("path")
+        path_text = f"A={path.value:g} [{path.source}]; " if path is not None else ""
         return (
             f"CVSS {severity.inputs['cvss']:g} [{severity.detail}] (S={severity.value:g}); "
             + threat_text
             + f"{exposure.inputs['reachability']} x {exposure.inputs['control']}"
             + f"{self.extras.get('control_note', '')} -> E={exposure.value:g}; "
             + f"{business.inputs['criticality']} -> B={business.value:g}; "
+            + path_text
             + f"score={self.score:g} [{self.band}]"
         )
 
@@ -164,17 +200,31 @@ def explain_row(explanation: Explanation, above: Explanation | None = None) -> s
     if explanation.degraded:
         lines.append("             （無威脅資料：該項移除，權重退回 severity）")
     lines.append("")
-    lines.append(f"  {'因子':<10} {'值':>6} {'權重':>6} {'貢獻':>6} {'佔比':>6}  來源")
+    third = "貢獻" if explanation.additive else "指數"
+    lines.append(f"  {'因子':<10} {'值':>6} {'權重':>6} {third:>6} {'佔比':>6}  來源")
     for factor in explanation.factors:
-        share = f"{factor.share_of(explanation.score) * 100:.0f}%"
+        if explanation.additive:
+            amount = f"{factor.contribution:>6.2f}"
+            share = f"{factor.share_of(explanation.score) * 100:.0f}%"
+        else:
+            # 幾何平均沒有「這一項貢獻幾分」；留白比填一個加不回總分的數字誠實。
+            amount = f"{factor.weight:>6.2f}"
+            share = "   n/a"
         lines.append(
             f"  {factor.symbol} {factor.key:<8} {factor.value:>6.3g} {factor.weight:>6.2f} "
-            f"{factor.contribution:>6.2f} {share:>6}  {factor.source}"
+            f"{amount} {share:>6}  {factor.source}"
         )
+    if not explanation.additive:
+        lines.append("  （幾何平均：總分不是各項之和，所以沒有逐項貢獻可報）")
 
     if above is not None and above.scored:
         lines.append("")
         deltas = explanation.gap_to(above)
+        if not deltas:
+            lines.append(f"  與前一名（{above.cve} on {above.asset}，{above.score:g}）"
+                         f"差 {round(explanation.score - above.score, 2):+g} 分；"
+                         f"幾何平均無法逐項歸因。")
+            return "\n".join(lines)
         total = round(sum(d for _k, d in deltas), 2)
         moved = [(k, d) for k, d in deltas if d != 0]
         header = f"  與前一名（{above.cve} on {above.asset}，{above.score:g}）"

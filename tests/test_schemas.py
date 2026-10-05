@@ -105,7 +105,7 @@ def test_ranked_result_contract_matches_the_code_and_a_real_run(tmp_path):
         "rank",
         "--scanner", str(NORTHSTAR / "scanner.csv"),
         "--context", str(NORTHSTAR / "asset_context.csv"),
-        "--rules", str(ROOT / "config/risk_rules.yaml"),
+        "--rules", str(ROOT / "config/risk_rules.v0.1.yaml"),
         "--snapshots", str(ROOT / "data/snapshots/nvd"),
         "--epss", str(ROOT / "data/snapshots/epss"),
         "--kev", str(ROOT / "data/snapshots/kev"),

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from .models import PriorityBand, RiskRules
+from .models import ADDITIVE, GEOMETRIC, PriorityBand, RiskRules
 from .normalization.business import BusinessRules
 from .normalization.control import ControlRules, ControlRulesError, parse_control_rules
 from .normalization.cvss import SUPPORTED_VERSIONS
@@ -19,6 +19,8 @@ from .normalization.threat import ThreatRules
 
 # v0.1 凍結值域（ADR-day-05）；risk_rules.yaml 只提供數值映射，不得增刪鍵
 REQUIRED_WEIGHT_KEYS = frozenset({"severity", "threat", "exposure", "business"})
+# 路徑項是 Day 23 才加的，v0.1 凍結版沒有它——所以它是選用的，不是必要的。
+OPTIONAL_WEIGHT_KEYS = frozenset({"path"})
 REQUIRED_REACHABILITY_KEYS = frozenset({"INTERNET", "INTERNAL", "ISOLATED"})
 REQUIRED_CONTROL_KEYS = frozenset({"NONE", "PARTIAL", "STRONG", "UNKNOWN"})
 REQUIRED_BUSINESS_KEYS = frozenset({"CRITICAL", "IMPORTANT", "NORMAL"})
@@ -166,15 +168,26 @@ def _parse_controls(raw: dict) -> ControlRules:
         raise RulesError(str(error)) from error
 
 
+def _parse_form(raw: dict) -> str:
+    form = str(raw.get("form", ADDITIVE))
+    if form not in (ADDITIVE, GEOMETRIC):
+        raise RulesError(
+            f"risk_rules.yaml: 'form' 必須是 {ADDITIVE} 或 {GEOMETRIC}，得到 {form!r}")
+    return form
+
+
 def load_rules(path: str | Path) -> RiskRules:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise RulesError("risk_rules.yaml: top level must be a mapping")
 
     weights_raw = raw.get("weights")
-    if not isinstance(weights_raw, dict) or set(weights_raw) != REQUIRED_WEIGHT_KEYS:
+    keys = set(weights_raw) if isinstance(weights_raw, dict) else set()
+    if not keys >= REQUIRED_WEIGHT_KEYS or not keys <= (REQUIRED_WEIGHT_KEYS
+                                                        | OPTIONAL_WEIGHT_KEYS):
         raise RulesError(
-            f"risk_rules.yaml: 'weights' must define exactly {sorted(REQUIRED_WEIGHT_KEYS)}"
+            f"risk_rules.yaml: 'weights' 必須包含 {sorted(REQUIRED_WEIGHT_KEYS)}，"
+            f"可選 {sorted(OPTIONAL_WEIGHT_KEYS)}；得到 {sorted(keys)}"
         )
     weights = {name: float(value) for name, value in weights_raw.items()}
     if not math.isclose(sum(weights.values()), 1.0, abs_tol=1e-9):
@@ -207,4 +220,5 @@ def load_rules(path: str | Path) -> RiskRules:
         business_impact=business,
         threat=threat,
         controls=_parse_controls(raw),
+        form=_parse_form(raw),
     )

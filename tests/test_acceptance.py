@@ -30,8 +30,17 @@ from cve2action.scoring.acceptance import (
 
 ROOT = Path(__file__).resolve().parents[1]
 NORTHSTAR = ROOT / "data/synthetic/northstar"
-CRITERIA = ROOT / "config/acceptance.yaml"
-RULES = load_rules(ROOT / "config/risk_rules.yaml")
+# Day 18 的門檻是八條，對 rules 0.3.0 量的；文章引用的 6/8 必須永遠重現得出來，
+# 所以它有自己的凍結檔。現行門檻（Day 23 起九條）在 config/acceptance.yaml。
+CRITERIA = ROOT / "config/acceptance.v0.1.yaml"
+CRITERIA_CURRENT = ROOT / "config/acceptance.yaml"
+# Day 18 那天：此後兩條豁免的 revisit_on 就到期了，門檻會改口說「未通過」——
+# 那是 Day 23 新增的到期檢查，不是回歸。
+DAY_18 = date(2026, 10, 3)
+# Day 5–18 的基準用 **v0.1 凍結版**規則：那些數字是已發表文章的依據，
+# 必須永遠重現得出來。production 設定（config/risk_rules.yaml）自 Day 23 起
+# 多了路徑項，分數因此不同——那是預期的，不是回歸。
+RULES = load_rules(ROOT / "config/risk_rules.v0.1.yaml")
 AS_OF = date(2026, 9, 24)
 
 
@@ -50,7 +59,7 @@ def acceptance():
         load_catalog(snapshots / "kev"), _controls(), AS_OF,
     )
     rows = [row_from(e) for e in explanations]
-    return evaluate(load_criteria(CRITERIA), RULES, rows, explanations)
+    return evaluate(load_criteria(CRITERIA), RULES, rows, explanations, today=DAY_18)
 
 
 # --- 門檻結論 ---------------------------------------------------------------
@@ -165,15 +174,19 @@ def test_removing_a_waiver_turns_the_gate_red(tmp_path, acceptance):
         load_catalog(snapshots / "kev"), _controls(), AS_OF,
     )
     result = evaluate(load_criteria(thin), RULES, [row_from(e) for e in explanations],
-                      explanations)
+                      explanations, today=DAY_18)
     assert not result.accepted
     assert {c.id for c in result.blocking} == {"band_balance", "range_coverage"}
     assert "未通過" in report(result)
 
 
-def test_criteria_declare_which_rules_version_they_apply_to():
-    raw = yaml.safe_load(CRITERIA.read_text(encoding="utf-8"))
-    assert raw["applies_to_rules_version"] == RULES.version, (
+@pytest.mark.parametrize(("criteria", "rules"), [
+    ("config/acceptance.v0.1.yaml", "config/risk_rules.v0.1.yaml"),
+    ("config/acceptance.yaml", "config/risk_rules.yaml"),
+])
+def test_criteria_declare_which_rules_version_they_apply_to(criteria, rules):
+    raw = yaml.safe_load((ROOT / criteria).read_text(encoding="utf-8"))
+    assert raw["applies_to_rules_version"] == load_rules(ROOT / rules).version, (
         "門檻是對某一版規則量的；規則進版就要重新量並更新這一行"
     )
 
@@ -185,13 +198,14 @@ def test_cli_acceptance_exits_zero_and_prints_the_verdict(capsys):
         "acceptance",
         "--scanner", str(NORTHSTAR / "scanner.csv"),
         "--context", str(NORTHSTAR / "asset_context.csv"),
-        "--rules", str(ROOT / "config/risk_rules.yaml"),
+        "--rules", str(ROOT / "config/risk_rules.v0.1.yaml"),
         "--criteria", str(CRITERIA),
         "--snapshots", str(ROOT / "data/snapshots/nvd"),
         "--epss", str(ROOT / "data/snapshots/epss"),
         "--kev", str(ROOT / "data/snapshots/kev"),
         "--controls", str(NORTHSTAR / "controls.csv"),
         "--as-of", "2026-09-24",
+        "--today", str(DAY_18),
     ])
     out = capsys.readouterr().out
     assert code == 0
@@ -210,7 +224,7 @@ def test_every_band_maps_to_a_unique_tier_with_an_action():
 def test_rules_without_tiers_are_rejected(tmp_path):
     from cve2action.rules import RulesError
     from cve2action.rules import load_rules as load
-    text = (ROOT / "config/risk_rules.yaml").read_text(encoding="utf-8")
+    text = (ROOT / "config/risk_rules.v0.1.yaml").read_text(encoding="utf-8")
     broken = tmp_path / "r.yaml"
     broken.write_text(text.replace("tier: P0, ", ""), encoding="utf-8")
     with pytest.raises(RulesError, match="tier"):
@@ -240,3 +254,87 @@ def test_blueprint_thresholds_are_deliberately_not_adopted():
     as_blueprint = sum(1 for x in scored if x >= 80)
     as_shipped = sum(1 for r in rows if r["priority_tier"] == "P0")
     assert (as_blueprint, as_shipped) == (21, 9)
+
+
+# --- Day 23：門檻自己的缺陷 --------------------------------------------------
+
+def _run(criteria_path, rules=None, today=None):
+    rules = rules or RULES
+    snapshots = ROOT / "data/snapshots"
+    explanations = rank_explained(
+        read_scanner(NORTHSTAR / "scanner.csv"),
+        read_asset_context(NORTHSTAR / "asset_context.csv"),
+        rules, load_snapshots(snapshots / "nvd"), load_epss(snapshots / "epss"),
+        load_catalog(snapshots / "kev"), _controls(), AS_OF,
+    )
+    return evaluate(load_criteria(criteria_path), rules,
+                    [row_from(e) for e in explanations], explanations,
+                    today=today or DAY_18)
+
+
+def test_a_waiver_deadline_must_be_a_date_a_machine_can_check(tmp_path):
+    """Day 18 寫的是 `revisit_on: Day 20`。它看起來像承諾，實際上是永久豁免——
+    程式只檢查它非空，沒有任何東西能判斷它過了沒有。整整三天沒人被擋下來。
+    """
+    raw = yaml.safe_load(CRITERIA_CURRENT.read_text(encoding="utf-8"))
+    raw["waivers"][0]["revisit_on"] = "Day 20"
+    broken = tmp_path / "a.yaml"
+    broken.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(AcceptanceError, match="revisit_on"):
+        load_criteria(broken)
+
+
+def test_an_expired_waiver_stops_being_a_waiver():
+    """到期的豁免不是豁免。重新量測、重新說明，或者就去修。"""
+    before = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
+                  today=date(2026, 10, 7))
+    assert before.accepted
+    assert {c.id for c in before.waived} == {"band_balance", "range_coverage"}
+
+    after = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
+                 today=date(2026, 10, 13))
+    assert not after.accepted, "過了 revisit_on 就該擋下來"
+    assert {c.id for c in after.blocking} == {"band_balance", "range_coverage"}
+    assert not after.waived
+    assert all(c.status == "EXPIRED" for c in after.blocking)
+    assert "到期的豁免不是豁免" in report(after)
+
+
+def test_the_report_says_which_date_it_judged_expiry_on():
+    result = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
+                  today=date(2026, 10, 13))
+    assert "2026-10-13" in report(result)
+
+
+def test_measuring_one_version_with_another_versions_criteria_is_loud():
+    """Day 23 的 rules 配 Day 18 的門檻，分數會被上一版的標準評價。要出聲。"""
+    mismatched = _run(CRITERIA, load_rules(ROOT / "config/risk_rules.yaml"))
+    assert mismatched.version_mismatch
+    assert "版本不符" in report(mismatched)
+
+    aligned = _run(CRITERIA)
+    assert not aligned.version_mismatch
+    assert "版本不符" not in report(aligned)
+
+
+def test_explainable_now_requires_the_decomposition_to_rebuild_the_score():
+    """Day 18 的版本只數因子個數與來源，所以 Day 23 的幾何平均照樣拿滿分——
+    一個加不回總分的分解也算「可解釋」。門檻量錯東西比沒有門檻危險，因為它發綠燈。
+    """
+    geometric = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.geometric.yaml"),
+                     today=date(2026, 10, 7))
+    checks = {c.id: c for c in geometric.checks}
+    assert checks["explainable"].passed, "幾何平均的算式自己是重建得出來的"
+    assert not checks["attributable"].passed, "但逐項歸因重建不出名次差"
+    assert "重建" in checks["explainable"].description
+
+
+def test_the_frozen_day18_criteria_still_reproduce_the_published_numbers():
+    """Day 18 文章引用「通過 6/8、0.6316、0.44」。那些數字不能被今天的門檻改掉。"""
+    result = _run(CRITERIA)
+    measured = {c.id: c.measured for c in result.checks}
+    assert len(result.checks) == 8
+    assert measured["band_balance"] == pytest.approx(0.6316)
+    assert measured["range_coverage"] == pytest.approx(0.44)
+    assert len([c for c in result.checks if c.passed]) == 6
+    assert "attributable" not in measured, "凍結檔就是八條，補的那一條不回頭塞進去"

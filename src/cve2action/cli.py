@@ -27,6 +27,7 @@ from .attack_graph import (
     render_summary,
     resolve,
 )
+from .attack_graph.identity import privilege_obtainable
 from .collectors.epss import DEFAULT_CACHE_DIR as EPSS_CACHE_DIR
 from .collectors.epss import EpssError, get_epss_many
 from .collectors.epss import load_snapshots as load_epss_snapshots
@@ -49,6 +50,7 @@ from .scoring import explain_row, rank, rank_explained, row_from
 from .scoring.acceptance import AcceptanceError, evaluate, load_criteria
 from .scoring.acceptance import report as acceptance_report
 from .scoring.calibration import CalibrationError, compare, load_baseline, report
+from .scoring.path_score import compute as path_compute
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -164,6 +166,10 @@ def build_parser() -> argparse.ArgumentParser:
     acc_parser.add_argument("--kev", help="KEV 目錄快照所在目錄")
     acc_parser.add_argument("--controls", help="控制措施 CSV")
     acc_parser.add_argument("--as-of", default=str(date.today()), help="控制證據基準日")
+    acc_parser.add_argument(
+        "--today", default=str(date.today()),
+        help="判斷豁免是否到期的日期（預設今天）。與 --as-of 不同：--as-of 是資料的"
+             "基準日，這個是專案行事曆上的今天")
 
     graph_parser = subparsers.add_parser(
         "graph", help="把資產、服務、網路與帳號資料建成攻擊圖（Day 19）"
@@ -183,6 +189,20 @@ def build_parser() -> argparse.ArgumentParser:
     graph_parser.add_argument("--out", help="輸出圖的 JSON 路徑；不給就只印統計")
     graph_parser.add_argument("--resolve", metavar="OBSERVATION",
                               help="解析單一 IP／hostname／MAC 屬於哪一台資產")
+
+    for sub in (rank_parser, explain_parser, cal_parser, acc_parser):
+        sub.add_argument("--interfaces", help="網路介面 CSV（給了才算路徑分數 A）")
+        sub.add_argument("--services", help="服務清單 CSV")
+        sub.add_argument("--network", help="網路連線 CSV")
+        sub.add_argument("--identity", help="帳號權限關係 CSV")
+        sub.add_argument("--policies", help="網路政策 CSV")
+        sub.add_argument("--findings", help="弱掃結果 CSV（判定身分前提用）")
+    rank_parser.set_defaults(assets=None)
+    explain_parser.set_defaults(assets=None)
+    cal_parser.set_defaults(assets=None)
+    acc_parser.set_defaults(assets=None)
+    for sub in (rank_parser, explain_parser, cal_parser, acc_parser):
+        sub.add_argument("--assets", help="資產清冊 CSV（算路徑分數時需要）")
 
     path_parser = subparsers.add_parser(
         "path", help="找出並呈現通往某台資產的路徑；查無路徑時說得出為什麼（Day 22）"
@@ -224,6 +244,30 @@ def _read_rows(path: str) -> list[dict]:
         return list(csv.DictReader(stream))
 
 
+def _path_scores(args, rules) -> dict[str, float]:
+    """有給攻擊圖資料時，算出每台資產的路徑分數 A（Day 23）。
+
+    沒給就回空 dict——引擎會把路徑項整個移除、權重退回 exposure，
+    而不是補零。補零等於宣告「走不到」，那是我們沒查的事。
+    """
+    if "path" not in rules.weights or not getattr(args, "interfaces", None):
+        return {}
+    graph, assets = _build_annotated_graph(args)
+    privileges = {}
+    if getattr(args, "snapshots", None) and getattr(args, "findings", None):
+        vectors = {}
+        for cve, record in load_snapshots(args.snapshots).items():
+            chosen = record.cvss.preferred(rules.cvss_version_preference)
+            if chosen is not None:
+                vectors[cve.upper()] = chosen.vector
+        services, scan = _read_rows(args.services), _read_rows(args.findings)
+        privileges = {a["asset_id"]: privilege_obtainable(a["asset_id"], services,
+                                                          scan, vectors)
+                      for a in assets}
+    return {asset: score.value
+            for asset, score in path_compute(graph, privileges).items()}
+
+
 def _load_scoring_inputs(args):
     """explain 與 rank 共用的輸入載入；回傳 rank_explained 需要的全部參數。"""
     rules = load_rules(args.rules)
@@ -236,6 +280,7 @@ def _load_scoring_inputs(args):
         load_catalog(args.kev) if args.kev else None,
         _read_rows(args.controls) if args.controls else None,
         date.fromisoformat(args.as_of),
+        _path_scores(args, rules),
     )
 
 
@@ -306,7 +351,8 @@ def _run_acceptance(args) -> int:
 
     explanations = rank_explained(*inputs)
     rows = [row_from(e) for e in explanations]
-    result = evaluate(criteria, inputs[2], rows, explanations)
+    result = evaluate(criteria, inputs[2], rows, explanations,
+                      today=date.fromisoformat(args.today))
     print(acceptance_report(result))
     return 0 if result.accepted else 1
 
