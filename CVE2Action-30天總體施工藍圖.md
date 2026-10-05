@@ -90,7 +90,7 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 > |---:|---|---|---|
 > | 1 | 匯入 40 筆以上弱點發現 | Day 6 | 已完成 |
 > | 2 | 多介面歸併為穩定資產 | **Day 19** | 盤點後補排 |
-> | 3 | 適用性不足標 `REVIEW_REQUIRED`／`NOT_APPLICABLE` | **Day 25** | 盤點後補排 |
+> | 3 | 適用性不足標 `REVIEW_REQUIRED`／`NOT_APPLICABLE` | **Day 25** | 已完成（1 筆 NOT_APPLICABLE、30 筆待複核）|
 > | 4 | 補上 CVSS、EPSS、KEV | Day 7–10 | 已完成 |
 > | 5 | 同時呈現 CVSS 排名與本專案排名 | **Day 28／29** | 盤點後補排 |
 > | 6 | 每個分數說明來源、加減分與資料缺口 | Day 16 | 已完成 |
@@ -318,7 +318,10 @@ CRPS=100\times L^{0.45}\times I^{0.35}\times \max(A,0.05)^{0.20}\times(1-0.6C)
 >
 > 1. 「可無需既有權限」需要一個明確定義。目前的作法是看路徑是不是只由網路跳組成；
 >    但 Day 21 的 `UNPROVEN`（不能證明走不通就當走得通）會讓這個判斷偏保守，
->    而偏保守在這裡是**往上覆寫**，方向正確但要寫清楚。**仍待 Day 25 當天決定。**
+>    而偏保守在這裡是**往上覆寫**，方向正確但要寫清楚。
+>    **已決定（2026-10-09）**：採最窄讀法——**整條路徑都是網路跳，沒有任何身分邊**。
+>    身分邊按定義需要先持有一個帳號，不管那個帳號好不好拿；Day 21 的 `SATISFIED`
+>    刻意不算，那種路徑的風險已由 Day 23 的 `A_Privilege` 計入分數。
 > 2. ~~P0/P1 降級的原因／核准人／有效期限沒有載體。~~ **已補**（2026-10-05）：
 >    新增 `data/synthetic/northstar/risk_acceptances.csv`（4 列）與對應契約。
 >    沿用 Day 2 `risk_acceptance_*` 的欄位語意，但在 Northstar 的正規化結構裡
@@ -368,7 +371,7 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 | 22 | 從 Internet 找到最短入侵路徑 | Path Finder | 找到並呈現一條路徑 |
 | 23 | 不是路徑愈短就一定愈危險 | Attack Path Score ＋ **公式形式決策** | ✅ 路徑條件以第五項 `A` 進入分數（§9.3 四項）；兩種形式都實作並各跑一次，**採用加權相加**（tau 相同 0.6、幾何平均在 `attributable` 上 0/37），[ADR-day-23](docs/decisions/ADR-day-23-formula-form.md)。同時修掉門檻自己的三個缺陷：`explainable` 從不檢查分解重建、缺少 `attributable`、`revisit_on` 不是可檢查的日期 |
 | 24 | 找出通往 Crown Jewel 的共同瓶頸 | Choke Point | ✅ 瓶頸改以**反事實**定義（移除後重算），不用出現頻率——兩者第一名不同。`NS-JUMP-01` 出現在四個 Crown Jewel 的每一個最小切割集合裡；單點瓶頸不存在（各需 ≥2 台）；切斷數不可相加。路徑呈現補上權限，§16 四項齊備。[ADR-day-24](docs/decisions/ADR-day-24-choke-point.md) |
-| 25 | 修漏洞不是唯一選項 | Remediation Model ＋ **適用性閘門** ＋ **§9.6 規則覆寫** | 支援 Patch 與補償控制；**處置結果新增 `NOT_APPLICABLE` 與 `REVIEW_REQUIRED` 兩種第一級結論，由版本證據支撐——最便宜的處置是證明它根本不適用**（§9.0 閘門 2、成功標準 #3；`version_evidence.csv` 已於 2026-10-05 備妥，14 列）。**同日實作 §9.6 的三條覆寫規則**（Day 24 盤點後補排，見下方註記）：①KEV＋Internet 可達＋有效攻擊路徑 → 至少 P0；②可無需既有權限通往 Crown Jewel → 至少 P1；③關鍵輸入缺失 → `REVIEW_REQUIRED`（本來就在這一列）。驗收：覆寫**只能升級不得降級**（UNKNOWN 不得降低風險的延伸）、每次覆寫留下觸發的是哪一條與憑哪些事實、P0/P1 降級須有原因／核准人／有效期限的載體（`risk_acceptances.csv` 已備妥，4 列）|
+| 25 | 修漏洞不是唯一選項 | ✅ Remediation Model ＋ **適用性閘門** ＋ **§9.6 規則覆寫** | 支援 Patch 與補償控制；**處置結果新增 `NOT_APPLICABLE` 與 `REVIEW_REQUIRED` 兩種第一級結論，由版本證據支撐——最便宜的處置是證明它根本不適用**（§9.0 閘門 2、成功標準 #3；`version_evidence.csv` 已於 2026-10-05 備妥，14 列）。**同日實作 §9.6 的三條覆寫規則**（Day 24 盤點後補排，見下方註記）：①KEV＋Internet 可達＋有效攻擊路徑 → 至少 P0；②可無需既有權限通往 Crown Jewel → 至少 P1；③關鍵輸入缺失 → `REVIEW_REQUIRED`（本來就在這一列）。驗收：覆寫**只能升級不得降級**（UNKNOWN 不得降低風險的延伸）、每次覆寫留下觸發的是哪一條與憑哪些事實、P0/P1 降級須有原因／核准人／有效期限的載體（`risk_acceptances.csv`，4 列）。**實測**：40 筆中證明不必修 1、適用 9、證不出來 30（其中 26 筆根本沒有版本證據）；§9.6 推高 16 筆、P0 從 9 變 25——規則沒壞，是 32/40 的 CVE 都在 KEV，輸入飽和。[ADR-day-25](docs/decisions/ADR-day-25-applicability-gate.md) |
 | 26 | Patch、隔離、關閉服務，哪一個先做？ | Candidate Engine | 每項措施有成本與限制 |
 | 27 | 用最少變更切斷最多攻擊路徑 | Remediation ROI | 比較投入與降低幅度 |
 | 28 | 做一個主管與工程師都看得懂的儀表板 | Dashboard | 排序、說明、路徑可操作；**同一畫面並陳 CVSS 排名與本專案排名兩欄**（成功標準 #5）|

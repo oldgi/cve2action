@@ -47,6 +47,7 @@ from .io import InputError, read_asset_context, read_scanner, write_ranked_resul
 from .models import DECISION_NEEDS_CONTEXT
 from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
+from .remediation import Facts, treat, treatment_report
 from .rules import RulesError, load_rules
 from .scoring import explain_row, rank, rank_explained, row_from
 from .scoring.acceptance import AcceptanceError, evaluate, load_criteria
@@ -172,6 +173,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--today", default=str(date.today()),
         help="判斷豁免是否到期的日期（預設今天）。與 --as-of 不同：--as-of 是資料的"
              "基準日，這個是專案行事曆上的今天")
+
+    treat_parser = subparsers.add_parser(
+        "treat", help="處置結果：適用性閘門與 §9.6 規則覆寫（Day 25）")
+    for name, helptext in (
+        ("--scanner", "弱掃結果 CSV"),
+        ("--context", "資產企業脈絡 CSV"),
+        ("--rules", "Decision Rule 設定 YAML"),
+        ("--snapshots", "NVD 快照目錄"),
+    ):
+        treat_parser.add_argument(name, required=True, help=helptext)
+    for name, helptext in (
+        ("--epss", "EPSS 快照目錄"),
+        ("--kev", "KEV 目錄快照所在目錄"),
+        ("--controls", "控制措施 CSV"),
+        ("--evidence", "版本證據 CSV（適用性閘門的輸入）"),
+        ("--acceptances", "風險接受 CSV（§9.6 的降級載體）"),
+        ("--remediations", "處置方案 CSV"),
+        ("--assets", "資產清冊 CSV"),
+        ("--interfaces", "網路介面 CSV"),
+        ("--services", "服務清單 CSV"),
+        ("--network", "網路連線 CSV"),
+        ("--identity", "帳號權限關係 CSV"),
+        ("--policies", "網路政策 CSV"),
+        ("--findings", "弱掃結果 CSV（建圖用）"),
+    ):
+        treat_parser.add_argument(name, help=helptext)
+    treat_parser.add_argument("--as-of", default=str(date.today()), help="證據基準日")
 
     graph_parser = subparsers.add_parser(
         "graph", help="把資產、服務、網路與帳號資料建成攻擊圖（Day 19）"
@@ -364,6 +392,68 @@ def _run_acceptance(args) -> int:
                       today=date.fromisoformat(args.today))
     print(acceptance_report(result))
     return 0 if result.accepted else 1
+
+
+def _unauthenticated_jewel_assets(graph) -> frozenset[str]:
+    """落在「整條都是網路跳、通往 Crown Jewel」路徑上的資產（§9.6 第二條）。
+
+    刻意不把帶身分邊的路徑算進來——身分邊按定義需要先持有一個帳號，
+    不管那個帳號好不好拿。理由寫在 remediation/overrides.py。
+    """
+    from .attack_graph.model import INTERNET_ID
+    from .attack_graph.paths import NETWORK
+
+    found: set[str] = set()
+    for jewel in (n.id for n in graph.crown_jewels):
+        for path in find_paths(graph, jewel):
+            if all(hop.kind == NETWORK for hop in path.hops):
+                found.update(path.assets)
+    found.discard(INTERNET_ID)
+    return frozenset(found)
+
+
+def _run_treat(args) -> int:
+    try:
+        rules = load_rules(args.rules)
+        explanations = rank_explained(
+            read_scanner(args.scanner), read_asset_context(args.context), rules,
+            load_snapshots(args.snapshots),
+            load_epss_snapshots(args.epss) if args.epss else {},
+            load_catalog(args.kev) if args.kev else None,
+            _read_rows(args.controls) if args.controls else None,
+            date.fromisoformat(args.as_of), _path_scores(args, rules))
+    except (RulesError, InputError, ValueError, FileNotFoundError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    catalog = load_catalog(args.kev) if args.kev else None
+    # 不要用 getattr(..., default)：屬性名打錯會默默變成「一筆 KEV 都沒有」，
+    # 而 §9.6 第一條就再也不會觸發。接錯要出聲，不要安靜地少做事。
+    kev = frozenset(str(c).upper() for c in catalog.entries) if catalog else frozenset()
+    if catalog is not None and not kev:
+        print("error: KEV 快照載入後是空的——這不可能，檢查 --kev 路徑",
+              file=sys.stderr)
+        return 2
+    reachable: frozenset[str] = frozenset()
+    unauthenticated: frozenset[str] = frozenset()
+    if args.assets and args.interfaces:
+        graph, _assets = _build_annotated_graph(args)
+        reachable = frozenset(n.id for n in graph.of_kind(ASSET)
+                              if find_paths(graph, n.id))
+        unauthenticated = _unauthenticated_jewel_assets(graph)
+
+    facts = Facts(
+        kev=kev, reachable=reachable, has_path=reachable,
+        unauthenticated_jewel=unauthenticated,
+        evidence={(r["asset_id"], r["cve"]): r
+                  for r in (_read_rows(args.evidence) if args.evidence else [])},
+        acceptances=_read_rows(args.acceptances) if args.acceptances else [],
+        remediations=_read_rows(args.remediations) if args.remediations else [],
+    )
+    as_of = date.fromisoformat(args.as_of)
+    treatments = [treat(e, facts, args.snapshots, as_of) for e in explanations]
+    print(treatment_report(treatments))
+    return 0
 
 
 def _run_graph(args) -> int:
@@ -656,6 +746,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_explain(args)
     if args.command == "calibrate":
         return _run_calibrate(args)
+    if args.command == "treat":
+        return _run_treat(args)
     if args.command == "acceptance":
         return _run_acceptance(args)
     if args.command == "graph":
