@@ -69,9 +69,21 @@ exposure:
 # 網段隔離對 AV:L 標為不適用，不是說隔離沒用——「誰到得了這台機器」已經由
 # Reachability 算過一次了，再從 Control 扣一次是同一項控制在同一條公式裡算兩次。
 controls:
+  # 適用性有兩條彼此獨立的軸線：
+  #   attack_vectors / requires_authentication（Day 15）—— 攔截點在不在這條攻擊路徑上？
+  #   blind_to_weaknesses（番外篇二）         —— 這項控制懂不懂這一類弱點？
+  #
+  # 第二條只會**否決**，不會批准。列進 blind_to_weaknesses 的 CWE 代表「這項控制
+  # 看不到這一層」；沒列到的不代表看得到，只代表我們沒有理由說它看不到。
+  # 拿不到 CWE 時這條軸線沉默——沉默不移動任何判定。
   applicability:
     waf:
       attack_vectors: [NETWORK]           # 只看得到送進來的應用層請求
+      blind_to_weaknesses:
+        # WAF 檢查的是 HTTP。TLS 交握發生在它下面，看不到就擋不住。
+        - CWE-326   # 加密強度不足
+        - CWE-327   # 使用已破解的密碼學演算法
+        - CWE-310   # 密碼學問題（舊版分類）
     network_segmentation:
       attack_vectors: [NETWORK, ADJACENT_NETWORK]
     edr:

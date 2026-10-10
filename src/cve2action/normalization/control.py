@@ -29,6 +29,8 @@ import re
 from dataclasses import dataclass, field
 
 # CVSS v3.1 與 v4.0 共用的 AV 縮寫；v4.0 的 AV 值域與 v3.1 相同
+CWE_PATTERN = re.compile(r"CWE-\d+")
+
 ATTACK_VECTORS = {
     "N": "NETWORK",
     "A": "ADJACENT_NETWORK",
@@ -61,11 +63,24 @@ class Attack:
 
 @dataclass(frozen=True)
 class ControlScope:
-    """一種控制類型攔得到什麼。"""
+    """一種控制類型攔得到什麼。
+
+    兩條**彼此獨立**的軸線：
+
+    - `attack_vectors` / `requires_authentication`（Day 15）——
+      **攔截點在不在這條攻擊路徑上？** 問 CVSS 的 AV 與 PR。
+    - `blind_to_weaknesses`（番外篇二）——
+      **這項控制懂不懂這一類弱點？** 問 NVD 的 CWE。
+
+    第二條只會**否決**，不會批准：列在 `blind_to_weaknesses` 裡的 CWE 代表
+    「這項控制看不到這一層」。沒列到的不代表看得到，只代表我們沒有理由說它看不到。
+    """
 
     attack_vectors: frozenset[str]
     # True 代表這項控制靠「強化驗證」生效；攻擊不需要驗證時它就沒有位置可站
     requires_authentication: bool = False
+    # 這項控制明確看不到的弱點類別（CWE）。空集合＝沒有宣告，不是「什麼都看得到」。
+    blind_to_weaknesses: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -87,15 +102,26 @@ def parse_attack(vector: str | None) -> Attack | None:
     return Attack(ATTACK_VECTORS[av.group(1)], PRIVILEGES[pr.group(1)])
 
 
-def applicability(control_type: str, attack: Attack | None,
-                  rules: ControlRules) -> tuple[str, str]:
-    """回傳 (結果, 一句話理由)。結果為三態之一。"""
+def applicability(control_type: str, attack: Attack | None, rules: ControlRules,
+                  weaknesses: tuple[str, ...] = ()) -> tuple[str, str]:
+    """回傳 (結果, 一句話理由)。結果為三態之一。
+
+    `weaknesses` 是該 CVE 的 CWE 清單（番外篇二）。**沉默不移動判定**：
+    拿不到 CWE 時這條軸線什麼都不說，前一條軸線憑證據得到的結論原封不動。
+
+    這不是「UNKNOWN 不得降低風險」的例外。那條講的是缺資料不得換來比較**安全**
+    的結論；而沉默在這裡換到的是**不變**。沒有資料的時候，兩個方向都不能動——
+    與 Day 25「空清單不是證據」是同一條。
+    """
     scope = rules.scope_for(control_type)
     if scope is None:
         # 沒有宣告適用範圍的控制類型：不假設它萬用，也不假設它無用
         return UNDECIDABLE, f"no applicability declared for {control_type}"
     if attack is None:
         return UNDECIDABLE, "no cvss vector to read AV/PR from"
+    blind = sorted(scope.blind_to_weaknesses & set(weaknesses))
+    if blind:
+        return NOT_APPLICABLE, f"blind to {'/'.join(blind)}"
     if attack.attack_vector not in scope.attack_vectors:
         return NOT_APPLICABLE, f"not applicable to AV:{attack.attack_vector}"
     if scope.requires_authentication and not attack.needs_authentication:
@@ -128,8 +154,22 @@ def parse_control_rules(section: object) -> ControlRules:
                 f"risk_rules.yaml: controls.applicability.{name} has unknown attack vectors "
                 f"{unknown}; allowed {sorted(allowed)}"
             )
+        blind = entry.get("blind_to_weaknesses") or []
+        if not isinstance(blind, list):
+            raise ControlRulesError(
+                f"risk_rules.yaml: controls.applicability.{name}.blind_to_weaknesses "
+                "must be a list"
+            )
+        cwes = {str(c).strip().upper() for c in blind}
+        malformed = sorted(c for c in cwes if not CWE_PATTERN.fullmatch(c))
+        if malformed:
+            raise ControlRulesError(
+                f"risk_rules.yaml: controls.applicability.{name}.blind_to_weaknesses "
+                f"has malformed entries {malformed}; expected CWE-nnn"
+            )
         scopes[str(name).strip().lower()] = ControlScope(
             attack_vectors=frozenset(values),
             requires_authentication=bool(entry.get("requires_authentication", False)),
+            blind_to_weaknesses=frozenset(cwes),
         )
     return ControlRules(applicability=scopes)

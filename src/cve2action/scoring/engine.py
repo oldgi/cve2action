@@ -186,6 +186,7 @@ def explain_finding(
         derived = derive_control_effectiveness(
             str(finding.get("asset")), controls, rules, as_of or date.today(),
             parse_attack(_chosen_vector(snapshot, rules)), check_applicability=True,
+            weaknesses=tuple(getattr(snapshot, "weaknesses", ()) or ()),
         )
         control_label, control_source = derived.value, derived.source
         control_value = rules.control_effectiveness[derived.value]

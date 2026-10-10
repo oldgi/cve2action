@@ -15,7 +15,7 @@
 | 進度 | Day 1–19 與番外篇已發表；Day 20–25 已完成待發 |
 | Decision Rule | `config/risk_rules.yaml` 版本 `0.4.0`（五項、加權相加）；Day 5–18 的已發表數字以 `config/risk_rules.v0.1.yaml`（`0.3.0`）重現 |
 | 評分門檻 | `config/acceptance.yaml` 版本 `0.2.0`，九條；7 通過、2 豁免、0 阻擋 |
-| 規模 | 481 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 / 10 身分邊 |
+| 規模 | 497 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 / 10 身分邊 |
 | 最近修訂 | 2026-10-07 |
 
 施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ 做評分（11–18）→ **畫攻擊路徑（19–24）** → 給修補建議（25–30）
@@ -105,6 +105,7 @@ uv run cve2action rank \
 | [ADR-day-23](docs/decisions/ADR-day-23-formula-form.md) | 採用加權相加，依據是門檻而不是論述 |
 | [ADR-day-24](docs/decisions/ADR-day-24-choke-point.md) | 瓶頸是反事實量出來的，不是數出來的 |
 | [ADR-day-25](docs/decisions/ADR-day-25-applicability-gate.md) | 證明不必修只有一種方式；覆寫只升不降 |
+| [ADR-extra-02](docs/decisions/ADR-extra-02-weakness-axis.md) | 新軸線只能憑證據否決，不能憑沉默否決 |
 
 **文章**（`docs/articles/`）
 
@@ -116,7 +117,7 @@ uv run cve2action rank \
 | 畫攻擊路徑 | [Day 19](docs/articles/day-19.md)・[20](docs/articles/day-20.md)・[21](docs/articles/day-21.md)・[22](docs/articles/day-22.md)・[23](docs/articles/day-23.md)・[24](docs/articles/day-24.md) |
 | 給修補建議 | [Day 25](docs/articles/day-25.md) |
 
-**番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化，以及加法／幾何平均之外還有哪些形式。
+**番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化。｜[一個新判準，可能讓原本對的答案變錯](docs/articles/extra-02-weakness-axis.md)——控制適用性的第二條軸線，以及為什麼沉默不該移動判定。
 
 **研究備忘**：[Day 2 案例設計](docs/research/day-02-case-design.md)、[Day 3 概念與邊界](docs/research/day-03-concepts-and-boundaries.md)
 

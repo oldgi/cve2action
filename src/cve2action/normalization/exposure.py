@@ -68,7 +68,8 @@ def _evidence_age_days(verified_at: str, as_of: date) -> int | None:
 
 def derive_control_effectiveness(asset_id: str, controls: list[dict], rules, as_of: date,
                                  attack: Attack | None = None,
-                                 check_applicability: bool = False) -> Derived:
+                                 check_applicability: bool = False,
+                                 weaknesses: tuple[str, ...] = ()) -> Derived:
     """合併一台資產上的所有控制；沒有可用證據時回 NONE，證據過期回 UNKNOWN。
 
     只比較「有證據且未過期」的控制，取折減效果最強的那一個。UNKNOWN 的控制不參與比較，
@@ -76,6 +77,9 @@ def derive_control_effectiveness(asset_id: str, controls: list[dict], rules, as_
 
     `check_applicability`（Day 15）打開時先過一次適用性：攔截點不在這條攻擊路徑上的控制，
     不論證據多新、強度多高，都不參與折減；`attack` 讀不出來就是無法判斷，同樣不折減。
+
+    `weaknesses`（番外篇二）是該 CVE 的 CWE 清單，供適用性的第二條軸線使用：
+    **這項控制懂不懂這一類弱點。** 拿不到 CWE 時這條軸線沉默，不移動任何判定。
     """
     mine = [c for c in controls if c.get("asset_id") == asset_id]
     if not mine:
@@ -101,7 +105,7 @@ def derive_control_effectiveness(asset_id: str, controls: list[dict], rules, as_
         if effectiveness == CONTROL_UNKNOWN:
             stale.append(f"control:{kind}@{verified} (unproven)")
             continue
-        verdict, why = _applicability(kind, attack, rules, check_applicability)
+        verdict, why = _applicability(kind, attack, rules, check_applicability, weaknesses)
         if verdict != APPLICABLE:
             bucket = inapplicable if verdict == NOT_APPLICABLE else stale
             bucket.append(f"control:{kind}@{verified} ({why})")
@@ -121,13 +125,13 @@ def derive_control_effectiveness(asset_id: str, controls: list[dict], rules, as_
     return Derived(CONTROL_UNKNOWN, "; ".join(notes) if notes else "no-usable-evidence")
 
 
-def _applicability(kind: str, attack: Attack | None, rules,
-                   evaluate: bool) -> tuple[str, str]:
+def _applicability(kind: str, attack: Attack | None, rules, evaluate: bool,
+                   weaknesses: tuple[str, ...] = ()) -> tuple[str, str]:
     """資產層的推導（Day 12）不看適用性；逐筆評分（Day 15）才看。"""
     control_rules = getattr(rules, "controls", None)
     if not evaluate or control_rules is None:
         return APPLICABLE, ""
-    return control_applicability(kind, attack, control_rules)
+    return control_applicability(kind, attack, control_rules, weaknesses)
 
 
 def derive_asset_context(assets: list[dict], controls: list[dict], rules, as_of: date,
