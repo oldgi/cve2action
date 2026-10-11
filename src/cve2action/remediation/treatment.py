@@ -163,7 +163,12 @@ def report(treatments: list[Treatment]) -> str:
     for item in treatments:
         for rule in item.fired:
             fired[rule] = fired.get(rule, 0) + 1
-        if item.tier != item.tier_before and item.tier_before:
+        # 只算真的往上推的。已證明不必修的那筆層級變成空白，那是離開佇列，
+        # 不是升級——Day 25 把它算進去，發表成「16 筆被推上去、P0 變 25」，
+        # 實際是 15 筆、P0 變 24（Day 26 更正）。
+        order = overrides.TIER_ORDER
+        if (item.tier and item.tier_before
+                and order.index(item.tier) < order.index(item.tier_before)):
             raised += 1
     lines.append("")
     lines.append(f"  §9.6 覆寫：{raised} 筆層級被推上去；待複核 {len(review)} 筆")
