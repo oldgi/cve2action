@@ -459,9 +459,9 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 | 25＋ | ✅ **番外篇二**：控制擋得住這一類弱點嗎？ | 控制適用性的第二條軸線（CWE） | **與 Day 25 同日發表。** 兌現 Day 15 文章對讀者許下、而 Day 25 沒有兌現的那個承諾——見下方註記 |
 | 26 | Patch、隔離、關閉服務，哪一個先做？ | Candidate Engine | 每項措施有成本與限制 |
 | 27 | 用最少變更切斷最多攻擊路徑 | Remediation ROI | 比較投入與降低幅度 |
-| 28 | 做一個主管與工程師都看得懂的儀表板 | Dashboard | 排序、說明、路徑可操作；**同一畫面並陳 CVSS 排名與本專案排名兩欄**（成功標準 #5）|
+| 28 | 做一個主管與工程師都看得懂的儀表板 | Dashboard（`app/dashboard.py`） | 排序、說明、路徑可操作；**同一畫面並陳 CVSS 排名與本專案排名兩欄**（成功標準 #5）。資料層 `app/data.py` 已就緒、四個視圖驗證過畫得出來（2026-10-11）|
 | 29 | 四個情境驗證：模型真的比 CVSS 排序好嗎？ | 測試報告及 Demo GIF | 四個必測情境通過；**以 Day 28 的並陳結果回答標題那個問題，差異逐筆說明**（成功標準 #5）|
-| 30 | 從 CVE 堆到修補優先序 | Release v1.0.0 | 一鍵重現完整流程 |
+| 30 | 從 CVE 堆到修補優先序 | Release v1.0.0 | 一鍵重現完整流程；**含 `Dockerfile`**（§12 盤點後補排，2026-10-11） |
 
 
 > **Day 18 盤點補記（2026-10-03）**：下列三項屬於 §4.1 MVP 與 §5 成功標準，但原施工表沒有
@@ -507,10 +507,10 @@ cve2action/
 │   ├── normalization/
 │   ├── scoring/
 │   ├── attack_graph/
-│   ├── remediation/
-│   └── api/
+│   └── remediation/
 ├── app/
-│   └── dashboard.py
+│   ├── dashboard.py
+│   └── data.py
 ├── tests/
 ├── docs/
 │   ├── architecture/
@@ -521,6 +521,31 @@ cve2action/
     └── ci.yml
 ```
 
+> **Day 26 盤點（2026-10-11）：§12 的每一項歸誰負責。**
+>
+> 這一節從頭到尾只畫了最終結構，沒說哪一天建哪一個——於是三個目錄一直不存在，
+> 而沒有任何一天會因此紅燈。這與 Day 24 抓到 §9.6「寫在規格裡卻沒人負責」
+> 是同一個形狀，10/01 的稽核查了結構但只記錄「刻意不做的」，沒產出這份對照。
+>
+> | 項目 | 狀態 | 負責日 |
+> |---|---|---|
+> | `README.md`／`CHANGELOG.md`／`LICENSE`／`pyproject.toml` | ✅ | Day 6、稽核補齊 |
+> | `data/synthetic`／`snapshots`／`schemas` | ✅ | Day 2／7／稽核 |
+> | `src/cve2action/collectors`／`normalization`／`scoring`／`attack_graph`／`remediation` | ✅ | Day 7／12／16／19／25 |
+> | `tests`／`.github/workflows` | ✅ | Day 6 |
+> | `docs/architecture`／`decisions`／`articles` | ✅ | Day 6／5／1 |
+> | **`app/`**（`dashboard.py`＋`data.py`） | ✅ **2026-10-11 建立** | **Day 28** 實作 |
+> | **`Dockerfile`** | ✗ 待建 | **Day 30**（一鍵重現） |
+> | ~~`src/cve2action/api/`~~ | **已從本節移除** | — |
+> | `docs/methodology/` | 刻意不做 | 保留 `docs/research/`，見 README |
+>
+> **`api/` 移除的理由**：30 天裡沒有任何一天做對外 API，§9 之外也沒有任何需求
+> 支撐它。留在結構圖裡就是一個永遠的空殼——**結構圖該描述做得出來的東西，
+> 不是願望清單。**
+>
+> `app/data.py` 先於 Day 28 建立：2026-10-11 驗證四個視圖畫得出來時寫的查詢，
+> 原本暫放在 `scripts/`，現在歸位。**畫面與資料分開**——`data.py` 只查數字，
+> `dashboard.py` 才決定怎麼畫，理由與 Day 16 的 `Explanation` 相同。
 ## 13. Git 版本管理規則
 
 ### 13.1 分支

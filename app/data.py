@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Day 28 儀表板的資料查詢（2026-10-11 驗證可行性時寫的）。
+"""儀表板的資料層：四個視圖各自的查詢（藍圖 §12 的 `app/`，Day 28）。
 
 Day 24 做完之後，使用者問了一個對的問題：**我們寫的這些東西，看得見嗎？**
 
@@ -11,9 +11,13 @@ Day 24 做完之後，使用者問了一個對的問題：**我們寫的這些�
 小結文章——那會偷走 Day 28 的題目。這支腳本把當時的查詢留下來，Day 28 直接接。
 
 ```bash
-uv run python scripts/dashboard_data.py            # 四個視圖全跑
-uv run python scripts/dashboard_data.py --view cvss
+uv run python app/data.py            # 四個視圖全跑，輸出 JSON
+uv run python app/data.py --view cvss
 ```
+
+**畫面與資料分開。** 這個檔只負責把數字查出來，不碰呈現；`app/dashboard.py`
+（Day 28）才決定怎麼畫。分開的理由跟 Day 16 的 `Explanation` 一樣——
+呈現是投影，投影不該反過來決定資料長什麼樣。
 
 ## 驗證時順手發現的一件事
 

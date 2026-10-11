@@ -132,6 +132,8 @@ src/cve2action/
 ├── remediation/     applicability（適用性閘門）、overrides（§9.6）、treatment
 ├── rules.py         載入並驗證 risk_rules.yaml，違反即拒載
 ├── io.py / models.py / cli.py
+app/                            儀表板（Day 28）：data.py 查數字、dashboard.py 畫畫面
+scripts/                        建資料集、契約驗證（不含呈現）
 config/risk_rules.yaml          權重、值域、分級、控制適用範圍（production，加權相加）
 config/risk_rules.geometric.yaml  §9.5 幾何平均；已比較、未採用，保留為對照組
 config/risk_rules.v0.1.yaml     Day 5–18 的凍結版，已發表數字靠它重現
