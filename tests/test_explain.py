@@ -225,3 +225,46 @@ def test_cli_explain_exits_2_when_nothing_matches(capsys):
 def test_share_of_zero_score_is_zero_not_a_crash():
     factor = Factor(key="severity", value=0.0, weight=0.5)
     assert factor.share_of(0.0) == 0.0
+
+
+# --- Day 16 已發表範例的回歸鎖（番外篇二前置，2026-10-10 補） ---------------
+
+def test_the_worked_example_day16_published_still_reproduces():
+    """Day 16 的文章拿 RC4 當範例：「落後前一名 0.41 分」「總分 7.01 對 7.43」。
+
+    那是整篇的核心示範——「最大變動項不等於造成輸贏的那一項」就靠這組數字說明。
+    而它到 2026-10-10 為止**沒有任何測試守著**：Day 5 的 Case A/B 有、
+    Day 18 的門檻有，就這條沒有。
+
+    番外篇二要動控制折減，動到的正是 RC4 這一筆。所以先把它鎖起來再改——
+    **先鎖住不能變的，再動可以變的。**
+    """
+    import csv as _csv
+    from datetime import date as _date
+
+    from cve2action.collectors.epss import load_snapshots as _load_epss
+    from cve2action.collectors.kev import load_catalog as _load_kev
+    from cve2action.collectors.nvd import load_snapshots as _load_nvd
+    from cve2action.io import read_asset_context as _ctx
+    from cve2action.io import read_scanner as _scan
+    from cve2action.scoring import rank_explained as _rank
+
+    data = ROOT / "data" / "synthetic" / "northstar"
+    with (data / "controls.csv").open(encoding="utf-8-sig", newline="") as stream:
+        controls = list(_csv.DictReader(stream))
+    rows = _rank(_scan(data / "scanner.csv"), _ctx(data / "asset_context.csv"), RULES,
+                 _load_nvd(ROOT / "data/snapshots/nvd"),
+                 _load_epss(ROOT / "data/snapshots/epss"),
+                 _load_kev(ROOT / "data/snapshots/kev"), controls, _date(2026, 9, 24))
+
+    rc4 = next(e for e in rows if e.cve == "CVE-2013-2566")
+    above = rows[rows.index(rc4) - 1]
+    assert rc4.score == 7.01, "Day 16 文章寫的是 7.01"
+    assert above.score == 7.43, "Day 16 文章寫的是前一名 7.43"
+    assert above.asset == "NS-APP-REPORT-01" and above.cve == "CVE-2020-1938"
+
+    deltas = dict(rc4.gap_to(above))
+    assert round(sum(deltas.values()), 2) == -0.41, "文章寫的是落後 0.41 分"
+    # 文章的論點：B 是絕對值最大的變動項，卻是 RC4 **贏**的那一項
+    assert max(deltas, key=lambda k: abs(deltas[k])) == "business"
+    assert deltas["business"] > 0

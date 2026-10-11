@@ -59,6 +59,11 @@ class CveRecord:
     description: str
     source_url: str
     retrieved_at: str
+    # NVD 宣告的弱點類別（CWE）。從 Day 7 起就抓回來了，躺在 raw 裡沒人看——
+    # 番外篇二才把它取出來當成控制適用性的第二條軸線。
+    # 預設為空：拿不到 CWE 是常態（30 個裡有 4 個），而空集合必須讀成「沒說」，
+    # 不能讀成「沒有弱點類別」。
+    weaknesses: tuple[str, ...] = ()
 
     @property
     def has_score(self) -> bool:
@@ -110,6 +115,7 @@ def parse_cve(payload: dict[str, Any], *, cve_id: str, source_url: str,
     return CveRecord(
         cve_id=cve.get("id", cve_id),
         cvss=_extract_scores(cve),
+        weaknesses=_extract_weaknesses(cve),
         published=cve.get("published"),
         last_modified=cve.get("lastModified"),
         description=_pick_english_description(cve),
@@ -176,10 +182,22 @@ def snapshot_path(cve_id: str, cache_dir: Path | str = DEFAULT_CACHE_DIR) -> Pat
     return Path(cache_dir) / f"{cve_id.upper()}.json"
 
 
+def _extract_weaknesses(cve: dict[str, Any]) -> tuple[str, ...]:
+    """CWE 清單。查無就是空的——**空不等於「沒有弱點類別」，是 NVD 沒說。**"""
+    found = []
+    for entry in cve.get("weaknesses") or []:
+        for item in entry.get("description") or []:
+            value = str(item.get("value", ""))
+            if value.startswith("CWE-") and value not in found:
+                found.append(value)
+    return tuple(found)
+
+
 def _extracted_view(record: CveRecord) -> dict[str, Any]:
     return {
         "cve_id": record.cve_id,
         "scores": record.cvss.to_dicts(),
+        "weaknesses": list(record.weaknesses),
         "published": record.published,
         "last_modified": record.last_modified,
         "description": record.description,

@@ -345,8 +345,11 @@ CI 的 `calibrate` 與 `acceptance` 都必須餵攻擊圖輸入（`--assets/--in
 - ~~漏洞適用性閘門（藍圖 §9.0 閘門 2）~~ **已完成（Day 25）**，見
   [ADR-day-25](../decisions/ADR-day-25-applicability-gate.md)。
 - 資產歸併（多 IP → 同一 asset）：目前假設 `scanner.csv` 已是歸併後結果。
-- **控制與弱點類別的對應**（AV/PR 判斷不了協定層，例如 WAF 對 TLS 層的 RC4 降級
-  仍被判為 `APPLICABLE`，那個折減站不住）。**已知且尚未排程**：
+- ~~**控制與弱點類別的對應**~~ **已完成（番外篇二，2026-10-10）**：
+  `controls.applicability.<type>.blind_to_weaknesses` 宣告該控制看不到的 CWE，
+  成為適用性的第二條軸線。**只否決不批准，且沉默不移動判定**——拿不到 CWE 時
+  這條軸線什麼都不說，見 [ADR-extra-02](../decisions/ADR-extra-02-weakness-axis.md)。
+  以下為當初的缺口記錄：
   [Day 15 文章](../articles/day-15.md) 當時寫「留給 Day 25」，但 Day 25 做的是
   §9.0 閘門 2 的**版本**適用性，不是控制與弱點類別的對應——是兩個不同的問題，
   已發表的那句承諾沒有兌現。**已排為番外篇二，與 Day 25 同日發表**（藍圖 §9.6 註記）。
