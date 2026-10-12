@@ -48,6 +48,8 @@ from .models import DECISION_NEEDS_CONTEXT
 from .normalization.business import derive_business_context
 from .normalization.exposure import ExposureError, derive_asset_context
 from .remediation import Facts, treat, treatment_report
+from .remediation.candidates import CandidateError, Weakness, build_candidates, plan_all
+from .remediation.candidates import report as candidates_report
 from .rules import RulesError, load_rules
 from .scoring import explain_row, rank, rank_explained, row_from
 from .scoring.acceptance import AcceptanceError, evaluate, load_criteria
@@ -176,30 +178,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     treat_parser = subparsers.add_parser(
         "treat", help="處置結果：適用性閘門與 §9.6 規則覆寫（Day 25）")
-    for name, helptext in (
-        ("--scanner", "弱掃結果 CSV"),
-        ("--context", "資產企業脈絡 CSV"),
-        ("--rules", "Decision Rule 設定 YAML"),
-        ("--snapshots", "NVD 快照目錄"),
-    ):
-        treat_parser.add_argument(name, required=True, help=helptext)
-    for name, helptext in (
-        ("--epss", "EPSS 快照目錄"),
-        ("--kev", "KEV 目錄快照所在目錄"),
-        ("--controls", "控制措施 CSV"),
-        ("--evidence", "版本證據 CSV（適用性閘門的輸入）"),
-        ("--acceptances", "風險接受 CSV（§9.6 的降級載體）"),
-        ("--remediations", "處置方案 CSV"),
-        ("--assets", "資產清冊 CSV"),
-        ("--interfaces", "網路介面 CSV"),
-        ("--services", "服務清單 CSV"),
-        ("--network", "網路連線 CSV"),
-        ("--identity", "帳號權限關係 CSV"),
-        ("--policies", "網路政策 CSV"),
-        ("--findings", "弱掃結果 CSV（建圖用）"),
-    ):
-        treat_parser.add_argument(name, help=helptext)
-    treat_parser.add_argument("--as-of", default=str(date.today()), help="證據基準日")
+    candidates_parser = subparsers.add_parser(
+        "candidates", help="候選措施：每筆 finding 先做哪一項、哪一項能結案（Day 26）")
+    for sub in (treat_parser, candidates_parser):
+        _add_treat_arguments(sub)
 
     graph_parser = subparsers.add_parser(
         "graph", help="把資產、服務、網路與帳號資料建成攻擊圖（Day 19）"
@@ -274,6 +256,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="情境時點 YYYY-MM-DD；控制證據的年齡以此計算，固定值才能重現",
     )
     return parser
+
+
+def _add_treat_arguments(treat_parser) -> None:
+    """treat 與 candidates 吃同一組輸入：候選引擎是處置結果的下一步，不是另一條管線。"""
+    for name, helptext in (
+        ("--scanner", "弱掃結果 CSV"),
+        ("--context", "資產企業脈絡 CSV"),
+        ("--rules", "Decision Rule 設定 YAML"),
+        ("--snapshots", "NVD 快照目錄"),
+    ):
+        treat_parser.add_argument(name, required=True, help=helptext)
+    for name, helptext in (
+        ("--epss", "EPSS 快照目錄"),
+        ("--kev", "KEV 目錄快照所在目錄"),
+        ("--controls", "控制措施 CSV"),
+        ("--evidence", "版本證據 CSV（適用性閘門的輸入）"),
+        ("--acceptances", "風險接受 CSV（§9.6 的降級載體）"),
+        ("--remediations", "處置方案 CSV"),
+        ("--assets", "資產清冊 CSV"),
+        ("--interfaces", "網路介面 CSV"),
+        ("--services", "服務清單 CSV"),
+        ("--network", "網路連線 CSV"),
+        ("--identity", "帳號權限關係 CSV"),
+        ("--policies", "網路政策 CSV"),
+        ("--findings", "弱掃結果 CSV（建圖用）"),
+    ):
+        treat_parser.add_argument(name, help=helptext)
+    treat_parser.add_argument("--as-of", default=str(date.today()), help="證據基準日")
 
 
 def _read_rows(path: str) -> list[dict]:
@@ -412,7 +422,8 @@ def _unauthenticated_jewel_assets(graph) -> frozenset[str]:
     return frozenset(found)
 
 
-def _run_treat(args) -> int:
+def _treatments(args):
+    """跑出每筆 finding 的處置結論；失敗回 (None, exit code)。"""
     try:
         rules = load_rules(args.rules)
         explanations = rank_explained(
@@ -424,7 +435,7 @@ def _run_treat(args) -> int:
             date.fromisoformat(args.as_of), _path_scores(args, rules))
     except (RulesError, InputError, ValueError, FileNotFoundError) as error:
         print(f"error: {error}", file=sys.stderr)
-        return 2
+        return None, 2
 
     catalog = load_catalog(args.kev) if args.kev else None
     # 不要用 getattr(..., default)：屬性名打錯會默默變成「一筆 KEV 都沒有」，
@@ -433,7 +444,7 @@ def _run_treat(args) -> int:
     if catalog is not None and not kev:
         print("error: KEV 快照載入後是空的——這不可能，檢查 --kev 路徑",
               file=sys.stderr)
-        return 2
+        return None, 2
     reachable: frozenset[str] = frozenset()
     unauthenticated: frozenset[str] = frozenset()
     if args.assets and args.interfaces:
@@ -451,8 +462,35 @@ def _run_treat(args) -> int:
         remediations=_read_rows(args.remediations) if args.remediations else [],
     )
     as_of = date.fromisoformat(args.as_of)
-    treatments = [treat(e, facts, args.snapshots, as_of) for e in explanations]
+    return [treat(e, facts, args.snapshots, as_of) for e in explanations], 0
+
+
+def _run_treat(args) -> int:
+    treatments, code = _treatments(args)
+    if treatments is None:
+        return code
     print(treatment_report(treatments))
+    return 0
+
+
+def _run_candidates(args) -> int:
+    treatments, code = _treatments(args)
+    if treatments is None:
+        return code
+    rules = load_rules(args.rules)
+    weaknesses = {}
+    for cve, record in load_snapshots(args.snapshots).items():
+        chosen = record.cvss.preferred(rules.cvss_version_preference)
+        weaknesses[cve.upper()] = Weakness(chosen.vector if chosen else None,
+                                           tuple(record.weaknesses or ()))
+    try:
+        candidates = build_candidates(
+            _read_rows(args.remediations) if args.remediations else [], weaknesses,
+            _read_rows(args.controls) if args.controls else [], rules.controls)
+    except CandidateError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(candidates_report(plan_all(treatments, candidates)))
     return 0
 
 
@@ -748,6 +786,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_calibrate(args)
     if args.command == "treat":
         return _run_treat(args)
+    if args.command == "candidates":
+        return _run_candidates(args)
     if args.command == "acceptance":
         return _run_acceptance(args)
     if args.command == "graph":
