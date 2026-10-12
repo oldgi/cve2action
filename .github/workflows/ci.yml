@@ -120,3 +120,31 @@ jobs:
       # 有任何差異就代表快照、規則或推導邏輯動了而沒有一起更新資料集。
       - name: Committed dataset must be reproducible
         run: git diff --exit-code -- data/synthetic/northstar/
+
+  # Day 30：Dockerfile 是「一鍵重現」的承諾。本機沒有 Docker 的人寫的 Dockerfile，
+  # 唯一的驗證就是這裡——建得起來、測試在容器裡全綠、儀表板回應健康檢查。
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t cve2action .
+
+      - name: Tests inside the image
+        run: docker run --rm cve2action uv run --no-sync pytest -q
+
+      - name: Scenario report inside the image matches the committed one
+        run: |
+          docker run --rm -v "$PWD/docs/releases:/app/docs/releases" cve2action             uv run --no-sync python scripts/scenario_report.py
+          git diff --exit-code -- docs/releases/day-29-scenario-report.md
+
+      - name: Dashboard answers its health check
+        run: |
+          docker run -d --name dash -p 8501:8501 cve2action
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8501/_stcore/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs dash
+          exit 1

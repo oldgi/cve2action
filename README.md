@@ -7,26 +7,63 @@
 
 這個儲存庫同時是 2026 iThome 鐵人賽系列的程式與文章來源。
 
+![demo](docs/images/demo/demo.gif)
+
+## 三分鐘看懂
+
+| 問題 | 在哪裡回答 |
+|---|---|
+| CVSS 說先修哪個、我們說先修哪個？ | 儀表板 ①：兩欄並陳，六筆 CVSS 10.0 在本專案排序裡散到 #4–#32 |
+| 這一筆為什麼排在這裡？ | 儀表板 ②：公式、每一項的來源、與上一名逐項比較、攻擊路徑 |
+| Patch、隔離、關服務，做哪一個？ | 儀表板 ③：重算後的降分、切掉的路徑、工時；先做與結案分開 |
+| 攻擊者從哪裡進來、走到哪裡？ | 儀表板 ④：通往 Crown Jewel 的 30 條路徑與共同瓶頸 |
+| 模型真的比 CVSS 好嗎？ | 儀表板 ⑤ 與 [Day 29 測試報告](docs/releases/day-29-scenario-report.md)：四情境兩過兩部分 |
+
 ## 目前狀態
 
 | 項目 | 內容 |
 |---|---|
-| 版本 | `0.2.0`（已發行 `v0.2.0-data`）；`v0.3.0-scoring` 門檻已通過（Day 18） |
-| 進度 | Day 1–19 與番外篇已發表；Day 20–25 已完成待發 |
-| Decision Rule | `config/risk_rules.yaml` 版本 `0.4.0`（五項、加權相加）；Day 5–18 的已發表數字以 `config/risk_rules.v0.1.yaml`（`0.3.0`）重現 |
-| 評分門檻 | `config/acceptance.yaml` 版本 `0.2.0`，九條；7 通過、2 豁免、0 阻擋 |
-| 規模 | 497 個測試、Northstar 模擬資料 20 資產 / 40 findings / 25 連線 / 10 身分邊 |
-| 最近修訂 | 2026-10-07 |
+| 版本 | `1.0.0`（30 天施工完成；已知限制見下方） |
+| Decision Rule | `config/risk_rules.yaml` 版本 `0.4.0`（五項、加權相加）；Day 5–18 的已發表數字以 `config/risk_rules.v0.1.yaml` 重現 |
+| 評分門檻 | `config/acceptance.yaml` 九條；7 通過、2 豁免（2026-10-12 重新量測，見已知限制） |
+| 規模 | 543 個測試；Northstar 模擬資料 20 資產 / 40 findings / 25 連線 / 10 身分邊 / 15 候選措施 |
 
-施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ 做評分（11–18）→ **畫攻擊路徑（19–24）** → 給修補建議（25–30）
+施工五階段：定邊界（Day 1–5）→ 接資料（6–10）→ 做評分（11–18）→ 畫攻擊路徑（19–24）→ **給修補建議（25–30）**
 
 ## 快速開始
 
-需求：Python 3.12+ 與 [uv](https://docs.astral.sh/uv/)。
+**用 Docker（一鍵）**——什麼都不用裝，全部離線：
 
 ```bash
-uv sync
-uv run pytest
+docker build -t cve2action .
+docker run --rm -p 8501:8501 cve2action                      # 儀表板：http://localhost:8501
+docker run --rm cve2action uv run --no-sync pytest -q        # 全部測試
+```
+
+**用 uv**——需要 Python 3.12+ 與 [uv](https://docs.astral.sh/uv/)：
+
+```bash
+uv sync --extra dashboard
+uv run --extra dashboard streamlit run app/dashboard.py      # 儀表板
+uv run pytest                                                # 測試
+uv run python scripts/scenario_report.py                     # 重產四情境測試報告
+```
+
+**只用命令列**——每一個儀表板上的數字，命令列都算得出同一個（兩者跑的是同一條管線）：
+
+```bash
+D=data/synthetic/northstar
+ARGS="--scanner $D/scanner.csv --context $D/asset_context.csv
+  --rules config/risk_rules.yaml --as-of 2026-09-24
+  --snapshots data/snapshots/nvd --epss data/snapshots/epss --kev data/snapshots/kev
+  --controls $D/controls.csv --evidence $D/version_evidence.csv
+  --acceptances $D/risk_acceptances.csv --remediations $D/remediations.csv
+  --assets $D/assets.csv --interfaces $D/asset_interfaces.csv --services $D/services.csv
+  --network $D/network_edges.csv --identity $D/identity_edges.csv
+  --policies $D/network_policies.csv --findings $D/scanner.csv"
+uv run cve2action treat $ARGS        # 適用性閘門與 §9.6 覆寫（Day 25）
+uv run cve2action candidates $ARGS   # 每筆先做哪一項、哪一項能結案（Day 26）
+uv run cve2action roi $ARGS          # 每項措施降多少分、切幾條路徑（Day 27）
 ```
 
 最小示範（Day 6 的三個輸入，六筆 finding）：
@@ -106,6 +143,10 @@ uv run cve2action rank \
 | [ADR-day-24](docs/decisions/ADR-day-24-choke-point.md) | 瓶頸是反事實量出來的，不是數出來的 |
 | [ADR-day-25](docs/decisions/ADR-day-25-applicability-gate.md) | 證明不必修只有一種方式；覆寫只升不降 |
 | [ADR-extra-02](docs/decisions/ADR-extra-02-weakness-axis.md) | 新軸線只能憑證據否決，不能憑沉默否決 |
+| [ADR-day-26](docs/decisions/ADR-day-26-candidate-engine.md) | 「哪一個先做」是兩個問題：先做與結案 |
+| [ADR-day-27](docs/decisions/ADR-day-27-remediation-roi.md) | 降分與切路徑是兩個量，不能合併 |
+| [ADR-day-28](docs/decisions/ADR-day-28-dashboard.md) | 儀表板只是另一個投影，不得有第二套算法 |
+| [ADR-day-29](docs/decisions/ADR-day-29-scenarios.md) | 情境是查詢規則，不是挑出來的範例 |
 
 **文章**（`docs/articles/`）
 
@@ -115,7 +156,7 @@ uv run cve2action rank \
 | 接資料 | [Day 6](docs/articles/day-06.md)・[7](docs/articles/day-07.md)・[8](docs/articles/day-08.md)・[9](docs/articles/day-09.md)・[10](docs/articles/day-10.md) |
 | 做評分 | [Day 11](docs/articles/day-11.md)・[12](docs/articles/day-12.md)・[13](docs/articles/day-13.md)・[14](docs/articles/day-14.md)・[15](docs/articles/day-15.md)・[16](docs/articles/day-16.md)・[17](docs/articles/day-17.md)・[18](docs/articles/day-18.md) |
 | 畫攻擊路徑 | [Day 19](docs/articles/day-19.md)・[20](docs/articles/day-20.md)・[21](docs/articles/day-21.md)・[22](docs/articles/day-22.md)・[23](docs/articles/day-23.md)・[24](docs/articles/day-24.md) |
-| 給修補建議 | [Day 25](docs/articles/day-25.md) |
+| 給修補建議 | [Day 25](docs/articles/day-25.md)・[26](docs/articles/day-26.md)・[27](docs/articles/day-27.md)・[28](docs/articles/day-28.md)・[29](docs/articles/day-29.md)・[30](docs/articles/day-30.md) |
 
 **番外篇**：[風險公式不是找出來的，是長出來的](docs/articles/extra-01-formula-evolution.md)——公式為何會演化。｜[一個新判準，可能讓原本對的答案變錯](docs/articles/extra-02-weakness-axis.md)——控制適用性的第二條軸線，以及為什麼沉默不該移動判定。
 
@@ -129,11 +170,16 @@ src/cve2action/
 ├── normalization/   cvss、exposure、business、threat、control——把事實變成可進公式的值
 ├── attack_graph/    resolve、model、build、reachability、identity、paths、diagnose、choke
 ├── scoring/         engine、explain、path_score、calibration、acceptance
-├── remediation/     applicability（適用性閘門）、overrides（§9.6）、treatment
+├── remediation/     applicability（適用性閘門）、overrides（§9.6）、treatment、
+│                    candidates（先做／結案）、roi（反事實重算）
 ├── rules.py         載入並驗證 risk_rules.yaml，違反即拒載
 ├── io.py / models.py / cli.py
-app/                            儀表板（Day 28）：data.py 查數字、dashboard.py 畫畫面
-scripts/                        建資料集、契約驗證（不含呈現）
+app/                            儀表板（Day 28）：data.py 查數字（呼叫 CLI 同一條管線）、
+                                dashboard.py 畫畫面、scenarios.py 四個必測情境（Day 29）
+Dockerfile                      一鍵重現（Day 30）
+scripts/capture_demo.py         照 §14 展示腳本截圖並組成 Demo GIF
+scripts/scenario_report.py      產出 Day 29 測試報告（CI 重產比對）
+scripts/                        建資料集、契約驗證、展示素材與測試報告
 config/risk_rules.yaml          權重、值域、分級、控制適用範圍（production，加權相加）
 config/risk_rules.geometric.yaml  §9.5 幾何平均；已比較、未採用，保留為對照組
 config/risk_rules.v0.1.yaml     Day 5–18 的凍結版，已發表數字靠它重現
@@ -175,10 +221,25 @@ CI 每次 push 都會跑上述全部，另外加跑完整流程並以 `git diff 
 | `v0.1.1-context-gates` | 資產歸併、適用性及可達性閘門 | ✅ |
 | `v0.1.2-day1-release` | Day 1 定稿與文章主視覺 | ✅ |
 | `v0.2.0-data` | 資料管線與模擬資料（Day 11） | ✅ |
-| `v0.3.0-scoring` | 可解釋風險評分（Day 18） | 進行中 |
-| `v0.4.0-attack-graph` | 攻擊路徑分析（Day 24） | — |
-| `v0.5.0-remediation` | 修補決策與 What-if（Day 27） | — |
-| `v1.0.0-ironman` | 30 天文章與完整展示（Day 30） | — |
+| `v0.3.0-scoring` | 可解釋風險評分（Day 18） | 補標待確認 |
+| `v0.4.0-attack-graph` | 攻擊路徑分析（Day 24） | 補標待確認 |
+| `v0.5.0-remediation` | 修補決策與 What-if（Day 27） | 補標待確認 |
+| `v1.0.0-ironman` | 30 天文章與完整展示（Day 30） | 待發行 |
+
+## 已知限制（v1.0）
+
+每一條都量過，也都寫在對應的 ADR；列在這裡是因為**它們會跟著 v1.0 走**。
+
+1. **攻擊圖不看漏洞。** 到得了一個在聽的服務就當成拿下那台機器——所以 patch 切不掉任何路徑，
+   只有隔離與關服務切得掉（ADR-day-27）。
+2. **頂端沒有鑑別力。** 前十名的 B（業務）全是 CRITICAL、T（威脅）全在 KEV；32/40 的 CVE 都在 KEV，
+   覆寫後 24/40 是 P0。§8.4 情境二因此只到 #14（ADR-day-29）。
+3. **兩條評分門檻未過。** `band_balance` 0.5263（上限 0.50）、`range_coverage` 0.443（下限 0.60）。
+   根因是輸入解析度太粗；改值域會讓 Day 5–18 的回歸基準全部失效。豁免於 2026-11-12 再檢視（ADR-day-28）。
+4. **處置清冊是照弱點登記的。** 29/40 筆沒有任何候選措施；Day 24 找到的三個瓶頸，清冊裡沒有一項措施
+   （ADR-day-26、27）。
+5. **人工基準只有 5 筆，而且排序者就是作者。** τ-b 0.6 對 CVSS 0.527 是自我一致性，不是證據。
+6. **「可解析的最小差距」沒做。** 只標完全同分；0.08 分的差距仍顯示成先後。
 
 ## 聲明
 

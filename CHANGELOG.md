@@ -4,7 +4,28 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-12
+
+30 天施工完成。已知限制六條，寫在 README 與 `docs/releases/v1.0.0.md`——它們跟著 v1.0 走，不是待辦。
+
 ### Added
+
+- 新增 `Dockerfile` 與 `.dockerignore`（Day 30，藍圖 §12、§16）：`docker build` 之後全部離線，`docker run -p 8501:8501` 開儀表板、`uv run --no-sync pytest -q` 在容器裡跑全部測試。**作者本機沒有 Docker**，所以驗證放在 CI 的 `docker` job：建得起來、容器內測試全綠、容器內重產的四情境報告與版控一致、儀表板回應健康檢查。
+- 新增四個必測情境（Day 29，`app/scenarios.py`）：每個情境是一條逐字對應藍圖 §8.4 的**查詢規則**，資料裡符合的每一筆都評，`NO_CASE` 不算通過。實測兩過兩部分——情境三（同一漏洞的雙胞胎，有 WAF #16、沒有 #3）與情境四（關跳板 RDP 30→15）通過；情境一差一名（監控主機 #29，線畫在 #30，不事後挪）、**情境二沒到**（唯一符合的 CVSS 並列 19 → #14，未進前 9；B、T 在頂端沒有鑑別力）。對照人工排序新增真正的 Kendall τ-b（平手進分母）：本專案 0.6、只看 CVSS 0.527。`why_moved` 對 38 筆的名次差異逐筆算出主因。`scripts/scenario_report.py` 產出 `docs/releases/day-29-scenario-report.md`，CI 重產比對。ADR-day-29。
+- 新增儀表板（Day 28，`app/dashboard.py`，Streamlit＋Plotly，選用相依 `dashboard`）：六個分頁對應藍圖 §14 展示腳本八步——排名對照（CVSS 與本專案兩欄並陳，成功標準 #5）、單筆說明、措施模擬、攻擊路徑、情境驗證、匯出。`app/data.py` 改成呼叫 CLI 的同一批函式，**畫面不得有第二套算法**；CVSS 同分以並列呈現（六筆 10.0 並列第一，散到 #4–#32）；P0 計數不當頭條；降分與切路徑不合成一個數字。`tests/test_dashboard.py` 以 `AppTest` 無頭跑完整個 app。`scripts/capture_demo.py` 用系統的 Edge 照八步截圖並組成 `docs/images/demo/demo.gif`。ADR-day-28。
+- 新增 `remediation/roi.py` 與 CLI `cve2action roi`（Day 27）：每項措施套到攻擊圖的複本上，路徑、A、全部分數整條重算（成功標準 #9）。產出**降分**與**切路徑**兩個量並列、不合成；待重掃與待驗證的措施降幅記 0、沒有 ROI；組合以貪婪＋每步重算挑選（切斷數不可相加）。實測 14 項只有 1 項切得到路徑（隔離 MOVEit，2 條），**patch 一條都切不掉**——圖模型不看漏洞；Day 24 的三個瓶頸清冊裡沒有任何措施，只能以成本不明的試算列出。ADR-day-27。
+- 新增 `remediation/candidates.py` 與 CLI `cve2action candidates`（Day 26）：「哪一個先做」拆成**先做**（不用簽核、成本已知、停機最少）與**結案**（只有 patch）；做完之後三態 `CLOSES`／`RESCAN_REQUIRED`／`STAYS_OPEN`；成本讀不到是 `None` 不是 0、排最後；補償控制先過番外篇二的適用性閘門。29 筆沒有任何候選，引擎不替它們編一個 patch。ADR-day-26。
+
+### Changed
+
+- 評分門檻兩條豁免（`band_balance`、`range_coverage`）於 2026-10-12 到期，CI 依設計變紅。**重新量測**：上一版預測「一批不必修會離開分母」，實際只有 1 筆，最大分級 0.5263 → 0.5135 仍過半，跨距 0.443 不變。重新說明根因（輸入解析度），列入 v1.0 已知限制，2026-11-12 再檢視。
+- 版本 `0.2.0` → `1.0.0`；CI 安裝 `--extra dashboard`。
+
+### Fixed
+
+- **Day 25 已發表的 P0 計數錯了：是 24 不是 25。** `treatment.report` 把已證明不必修、層級從 P1 變空白的那一筆算成「被推上去」，25 是 9＋16 加出來的。在 Day 25 的合併 commit 上重跑即得 24。改成只計真正往上推的，`test_treat_counts_only_real_raises` 釘住；ADR-day-25、藍圖、儀表板加註更正，Day 26 文章開場更正。`app/data.py` 的同一個錯一併修掉。
+
+### Added（Day 25 以前，自 0.2.0 起）
 
 - 新增 `app/`（藍圖 §12）：`data.py` 是儀表板的資料層，`dashboard.py` 是 Day 28 的骨架。起因是 Day 24 之後的一個問題——**我們寫的這些東西看得見嗎**。四個視圖（路徑圖、前十名因子分解、CVSS 排名 vs 本專案排名、處置結果）都畫出來了，所以決定**不另外寫一篇「可視化」的小結文章**（那會偷走 Day 28 的題目），改成把查詢留下來給 Day 28 直接接。**畫面與資料分開**——`data.py` 只查數字，`dashboard.py` 才決定怎麼畫，理由與 Day 16 的 `Explanation` 相同：呈現是投影，投影不該反過來決定資料長什麼樣；`dashboard.py` 現在 exit 1 並指向資料層，不假裝已經實作。順手驗到的數字：通往 Crown Jewel 的 30 條路徑收斂後只剩 12 台資產 18 條邊；六筆 CVSS 10.0 在本專案排序裡跨了 28 個名次（掉最深的兩筆都是查無路徑）。
 - 發表紀錄：Day 25〈修漏洞不是唯一選項〉（[articles/10421435](https://ithelp.ithome.com.tw/articles/10421435)）與番外篇二〈一個新判準，可能讓原本對的答案變錯〉（[articles/10423442](https://ithelp.ithome.com.tw/articles/10423442)）於 2026-10-11 同日發表，正篇先、番外後。至此 Day 1–25 與兩篇番外篇全部發表完畢，「給修補建議」階段（Day 25–30）開工。
@@ -30,11 +51,11 @@
 - 新增 `normalization/business.py` 與 `business_context.csv`：Business Criticality 改由三項可查證事實推導（`data_class`、`rto_hours`、`customer_facing`），多維度取最嚴重者而非平均，缺事實則報錯；輸出新增 `business_source` 說明哪個維度勝出。ADR-day-13 記錄規則。
 - 新增 `normalization/exposure.py`：Reachability 由 Zone 推導（`risk_rules.yaml` 的 `exposure.zone_reachability`，可被觀測值覆寫）、Control Effectiveness 由 `controls.csv` 推導並套用證據有效期；每個值附 `reachability_source`／`control_source` 說明來源。新增 CLI `cve2action derive-context` 與 23 個測試，ADR-day-12 記錄規則。
 
-### Removed
+### Removed（Day 25 以前）
 
 - 刪除 `docs/images/day-12-evidence-typo-unkrown.png`（UNKROWN 拼錯、發表前已被取代）與五個 CVE 的九份快照（`CVE-2016-2183`、`CVE-2019-11510`、`CVE-2022-1388`、`CVE-2023-27997`、`CVE-2024-3400`）——Day 11 裁減 Northstar findings 後的殘留，repo 內無任何引用。
 
-### Fixed
+### Fixed（Day 25 以前）
 
 - **Day 16 已發表的核心範例沒有回歸測試守著。** 文章拿 RC4 示範「最大變動項不等於造成輸贏的那一項」，引用 7.01 對 7.43、差 0.41——Day 5 的 Case A/B 有測試、Day 18 的門檻有，就這組沒有。番外篇二動到的正是 RC4，所以先補 `test_the_worked_example_day16_published_still_reproduces` 再改程式：先鎖住不能變的，再動可以變的。
 - **一個被防禦性預設藏起來的 bug。** `treat` 第一版用 `getattr(catalog, "cves", ())` 取 KEV 清單，屬性名是錯的，於是它安靜地回空集合——§9.6 第一條一次都沒觸發，而輸出看起來完全正常。改成直接讀 `catalog.entries`，載入後是空的就 exit 2。**接錯要出聲，不要安靜地少做事。**
@@ -49,7 +70,7 @@
 - `docs/articles/day-04.md` 引用三張從未產出的圖（`day-04-visible-vs-context`／`-context-rabbit-hole`／`-v01-portrait`）：Day 4 最後改用一張八格長圖 `day04-infographic.png`，文章沒跟著改，repo 版本破圖至今（已發表版不受影響）。現改為引用長圖，並補上一直存在卻沒被引用的封面 `day04-fig1-cover.png`；另外兩處的圖說保留原文、改為引言樣式。`day-04-visual-captions.md` 標註為規劃稿並記錄實際落點。
 - `cve2action derive-context` 自 Day 13 起產出的 `business_criticality` 整欄為空：Day 13 把 criticality 移出 `assets.csv`（更名 `declared_criticality`）改由 `business_context.csv` 推導，但 `derive_asset_context` 仍讀舊欄位，CLI 也沒有對應輸入。照文件流程產出的 context 接回 `rank` 會整批變成 NEEDS_CONTEXT。當時測試只覆蓋函式層且自行補上 criticality，因此未被發現。現已新增三個走 CLI 的測試，其中一個斷言輸出與版控中的 `asset_context.csv` 逐位元組相同。
 
-### Changed
+### Changed（Day 25 以前）
 
 - 藍圖 §12 補上「每一項歸誰負責」的對照表。那一節原本只畫最終結構、沒說哪一天建哪一個，於是三個目錄一直不存在而沒有任何一天會因此紅燈——與 Day 24 抓到 §9.6「寫在規格裡卻沒人負責」是同一個形狀。10/01 的稽核查了結構，但只記錄「刻意不做的」，沒產出這份對照。結果：`app/` 已建（Day 28 實作）、`Dockerfile` 排入 Day 30、`docs/methodology/` 維持刻意不做。
 - **`src/cve2action/api/` 從藍圖 §12 移除。** 30 天裡沒有任何一天做對外 API，也沒有任何需求支撐它；留在結構圖裡就是一個永遠的空殼。**結構圖該描述做得出來的東西，不是願望清單。**
