@@ -50,6 +50,7 @@ from .normalization.exposure import ExposureError, derive_asset_context
 from .remediation import Facts, treat, treatment_report
 from .remediation.candidates import CandidateError, Weakness, build_candidates, plan_all
 from .remediation.candidates import report as candidates_report
+from .remediation.roi import choke_targets as roi_choke_targets
 from .remediation.roi import combined as roi_combined
 from .remediation.roi import evaluate as roi_evaluate
 from .remediation.roi import greedy as roi_greedy
@@ -549,10 +550,7 @@ def _run_roi(args) -> int:
                 for r in _read_rows(args.scanner)}
     result = roi_evaluate(graph, plans, score, services)
     chosen = roi_greedy(graph, score, result, services, args.budget)
-    # Day 24 的瓶頸：每個最小切割都少不了的，加上單台切最多的可處置節點
-    chokes = analyse(graph)
-    movable = sorted((c for c in chokes.chokes if c.actionable), key=lambda c: -c.cuts)
-    targets = list(dict.fromkeys(list(chokes.universal) + [c.asset for c in movable[:2]]))
+    targets = roi_choke_targets(analyse(graph))
     print(roi_render(result, roi_combined(graph, score, chosen, services), chosen,
                      args.budget, roi_what_if(graph, score, targets)))
     return 0

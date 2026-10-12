@@ -245,6 +245,15 @@ class WhatIf:
     score_drop: float
 
 
+def choke_targets(chokes, top: int = 3) -> list[str]:
+    """Day 24 說最該動的：每個最小切割都少不了的，加上單台切最多的可處置節點。
+
+    同樣切數時依資產名排，結果必須是決定性的——CLI 與儀表板要列出同一組。
+    """
+    movable = sorted((c for c in chokes.chokes if c.actionable), key=lambda c: (-c.cuts, c.asset))
+    return list(dict.fromkeys(list(chokes.universal) + [c.asset for c in movable[:top]]))
+
+
 def what_if(graph: AttackGraph, scorer: Scorer, assets: list[str]) -> list[WhatIf]:
     baseline = scorer(graph)
     out = []

@@ -287,12 +287,12 @@ def test_a_waiver_deadline_must_be_a_date_a_machine_can_check(tmp_path):
 def test_an_expired_waiver_stops_being_a_waiver():
     """到期的豁免不是豁免。重新量測、重新說明，或者就去修。"""
     before = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
-                  today=date(2026, 10, 7))
+                  today=date(2026, 10, 12))
     assert before.accepted
     assert {c.id for c in before.waived} == {"band_balance", "range_coverage"}
 
     after = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
-                 today=date(2026, 10, 13))
+                 today=date(2026, 11, 13))
     assert not after.accepted, "過了 revisit_on 就該擋下來"
     assert {c.id for c in after.blocking} == {"band_balance", "range_coverage"}
     assert not after.waived
@@ -302,8 +302,8 @@ def test_an_expired_waiver_stops_being_a_waiver():
 
 def test_the_report_says_which_date_it_judged_expiry_on():
     result = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.yaml"),
-                  today=date(2026, 10, 13))
-    assert "2026-10-13" in report(result)
+                  today=date(2026, 11, 13))
+    assert "2026-11-13" in report(result)
 
 
 def test_measuring_one_version_with_another_versions_criteria_is_loud():
@@ -322,7 +322,7 @@ def test_explainable_now_requires_the_decomposition_to_rebuild_the_score():
     一個加不回總分的分解也算「可解釋」。門檻量錯東西比沒有門檻危險，因為它發綠燈。
     """
     geometric = _run(CRITERIA_CURRENT, load_rules(ROOT / "config/risk_rules.geometric.yaml"),
-                     today=date(2026, 10, 7))
+                     today=date(2026, 10, 12))
     checks = {c.id: c for c in geometric.checks}
     assert checks["explainable"].passed, "幾何平均的算式自己是重建得出來的"
     assert not checks["attributable"].passed, "但逐項歸因重建不出名次差"
