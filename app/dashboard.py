@@ -4,7 +4,7 @@
 uv run --extra dashboard streamlit run app/dashboard.py
 ```
 
-五個分頁對應藍圖 §14 的展示腳本八步：
+六個分頁對應藍圖 §14 的展示腳本八步：
 
 | 分頁 | 展示腳本 |
 |---|---|
@@ -12,7 +12,8 @@ uv run --extra dashboard streamlit run app/dashboard.py
 | ② 單筆說明 | 5 展開公式、資料來源、攻擊路徑 |
 | ③ 措施模擬 | 6 選措施、7 前後分數、切掉的路徑、工時、每工時降分 |
 | ④ 攻擊路徑 | 通往 Crown Jewel 的路徑與瓶頸 |
-| ⑤ 匯出 | 8 匯出修補優先清單 |
+| ⑤ 情境驗證 | §8.4 四個必測情境（Day 29） |
+| ⑥ 匯出 | 8 匯出修補優先清單 |
 
 **畫面只負責畫。** 每個數字都來自 `app/data.py`，而 `data.py` 跑的是命令列的同一條管線
 ——儀表板上的數字與文章、測試、CI 是同一段程式算的。
@@ -38,6 +39,7 @@ import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import data  # noqa: E402
+import scenarios  # noqa: E402
 
 st.set_page_config(page_title="CVE2Action", page_icon="🛡️", layout="wide")
 
@@ -111,8 +113,8 @@ st.title("CVE2Action")
 st.markdown("**弱掃告訴我們哪裡有洞；CVE2Action 告訴我們攻擊者可能從哪裡進來、會走到哪裡，"
             "以及現在先做哪一件事最划算。**")
 
-tab_rank, tab_detail, tab_measure, tab_graph, tab_export = st.tabs(
-    ["① 排名對照", "② 單筆說明", "③ 措施模擬", "④ 攻擊路徑", "⑤ 匯出"])
+tab_rank, tab_detail, tab_measure, tab_graph, tab_scenario, tab_export = st.tabs(
+    ["① 排名對照", "② 單筆說明", "③ 措施模擬", "④ 攻擊路徑", "⑤ 情境驗證", "⑥ 匯出"])
 
 
 def label(row: dict) -> str:
@@ -363,7 +365,34 @@ with tab_graph:
                  hide_index=True, width="stretch")
 
 
-# --- ⑤ 匯出（展示腳本第 8 步） ---------------------------------------------------
+# --- ⑤ 情境驗證（Day 29，藍圖 §8.4） --------------------------------------------
+
+BADGE = {scenarios.PASS: "✅ 通過", scenarios.PARTIAL: "⚠️ 部分", scenarios.FAIL: "❌ 未過",
+         scenarios.NO_CASE: "— 資料裡沒有這種情況"}
+
+with tab_scenario:
+    st.markdown("**模型真的比 CVSS 排序好嗎？** 四個情境各寫成一條查詢規則，"
+                "資料裡符合的每一筆都評，不挑會過的那一筆。")
+    for item in scenarios.run_all(P):
+        with st.container(border=True):
+            number = "一二三四"[item.number - 1]
+            st.markdown(f"#### 情境{number}：{item.title}　{BADGE[item.verdict]}")
+            st.markdown(f"規則：{item.rule}　｜　判準：{item.criterion}")
+            st.markdown(f"**量到**：{item.finding}")
+            if item.caveat:
+                st.caption(item.caveat)
+            st.dataframe([{k: v for k, v in c.items() if not isinstance(v, (list, dict))}
+                          for c in item.cases], hide_index=True, width="stretch")
+    vs = scenarios.versus_expert(P, data.ROOT / "data/calibration/day-17-expert-ranking.yaml")
+    c1, c2 = st.columns(2)
+    c1.metric("與人工排序的一致度（本專案）", f"τ-b {vs['model'][0]}",
+              help=f"一致 {vs['model'][1]}、分歧 {vs['model'][2]}")
+    c2.metric("與人工排序的一致度（只看 CVSS）", f"τ-b {vs['cvss'][0]}",
+              help=f"一致 {vs['cvss'][1]}、分歧 {vs['cvss'][2]}、CVSS 平手 {vs['cvss'][3]}")
+    st.caption(f"只有 {vs['n']} 筆，而且排序者就是模型作者——這是自我一致性檢查，不是獨立驗證。")
+
+
+# --- ⑥ 匯出（展示腳本第 8 步） ---------------------------------------------------
 
 with tab_export:
     st.markdown("**修補優先清單**——同一台設備的多個介面已歸併，一筆就是一項工作。")

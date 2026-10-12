@@ -110,6 +110,12 @@ jobs:
           --policies data/synthetic/northstar/network_policies.csv
           --findings data/synthetic/northstar/scanner.csv
 
+      # Day 29 的測試報告是產出物：重產一次，與版控不同就代表數字動了而報告沒跟上。
+      - name: Scenario report must be reproducible
+        run: |
+          uv run python scripts/scenario_report.py
+          git diff --exit-code -- docs/releases/day-29-scenario-report.md
+
       # 推導與評分都離線，重跑必須得到與版控完全相同的結果；
       # 有任何差異就代表快照、規則或推導邏輯動了而沒有一起更新資料集。
       - name: Committed dataset must be reproducible
