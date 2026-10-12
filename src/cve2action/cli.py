@@ -50,6 +50,11 @@ from .normalization.exposure import ExposureError, derive_asset_context
 from .remediation import Facts, treat, treatment_report
 from .remediation.candidates import CandidateError, Weakness, build_candidates, plan_all
 from .remediation.candidates import report as candidates_report
+from .remediation.roi import combined as roi_combined
+from .remediation.roi import evaluate as roi_evaluate
+from .remediation.roi import greedy as roi_greedy
+from .remediation.roi import render as roi_render
+from .remediation.roi import what_if as roi_what_if
 from .rules import RulesError, load_rules
 from .scoring import explain_row, rank, rank_explained, row_from
 from .scoring.acceptance import AcceptanceError, evaluate, load_criteria
@@ -180,8 +185,12 @@ def build_parser() -> argparse.ArgumentParser:
         "treat", help="處置結果：適用性閘門與 §9.6 規則覆寫（Day 25）")
     candidates_parser = subparsers.add_parser(
         "candidates", help="候選措施：每筆 finding 先做哪一項、哪一項能結案（Day 26）")
-    for sub in (treat_parser, candidates_parser):
+    roi_parser = subparsers.add_parser(
+        "roi", help="措施重算：每項措施降多少分、切幾條路徑、每小時值多少（Day 27）")
+    for sub in (treat_parser, candidates_parser, roi_parser):
         _add_treat_arguments(sub)
+    roi_parser.add_argument("--budget", type=float, default=8.0,
+                            help="工時預算（小時），用來挑組合；預設一個工作天")
 
     graph_parser = subparsers.add_parser(
         "graph", help="把資產、服務、網路與帳號資料建成攻擊圖（Day 19）"
@@ -300,19 +309,23 @@ def _path_scores(args, rules) -> dict[str, float]:
     if "path" not in rules.weights or not getattr(args, "interfaces", None):
         return {}
     graph, assets = _build_annotated_graph(args)
-    privileges = {}
-    if getattr(args, "snapshots", None) and getattr(args, "findings", None):
-        vectors = {}
-        for cve, record in load_snapshots(args.snapshots).items():
-            chosen = record.cvss.preferred(rules.cvss_version_preference)
-            if chosen is not None:
-                vectors[cve.upper()] = chosen.vector
-        services, scan = _read_rows(args.services), _read_rows(args.findings)
-        privileges = {a["asset_id"]: privilege_obtainable(a["asset_id"], services,
-                                                          scan, vectors)
-                      for a in assets}
+    privileges = _privileges(args, rules, assets)
     return {asset: score.value
             for asset, score in path_compute(graph, privileges).items()}
+
+
+def _privileges(args, rules, assets) -> dict:
+    """每台資產可取得的權限（Day 21）。缺 NVD 或弱掃輸入就回空——權限項會被移除，不是補零。"""
+    if not (getattr(args, "snapshots", None) and getattr(args, "findings", None)):
+        return {}
+    vectors = {}
+    for cve, record in load_snapshots(args.snapshots).items():
+        chosen = record.cvss.preferred(rules.cvss_version_preference)
+        if chosen is not None:
+            vectors[cve.upper()] = chosen.vector
+    services, scan = _read_rows(args.services), _read_rows(args.findings)
+    return {a["asset_id"]: privilege_obtainable(a["asset_id"], services, scan, vectors)
+            for a in assets}
 
 
 def _load_scoring_inputs(args):
@@ -477,20 +490,71 @@ def _run_candidates(args) -> int:
     treatments, code = _treatments(args)
     if treatments is None:
         return code
+    try:
+        plans = _plans(args, treatments)
+    except CandidateError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    print(candidates_report(plans))
+    return 0
+
+
+def _plans(args, treatments):
     rules = load_rules(args.rules)
     weaknesses = {}
     for cve, record in load_snapshots(args.snapshots).items():
         chosen = record.cvss.preferred(rules.cvss_version_preference)
         weaknesses[cve.upper()] = Weakness(chosen.vector if chosen else None,
                                            tuple(record.weaknesses or ()))
+    candidates = build_candidates(
+        _read_rows(args.remediations) if args.remediations else [], weaknesses,
+        _read_rows(args.controls) if args.controls else [], rules.controls)
+    return plan_all(treatments, candidates)
+
+
+def _scorer(args):
+    """給 ROI 用：同一組評分輸入，換一份圖重算 40 筆的分數。"""
+    rules = load_rules(args.rules)
+    graph, assets = _build_annotated_graph(args)
+    privileges = _privileges(args, rules, assets)
+    fixed = (read_scanner(args.scanner), read_asset_context(args.context), rules,
+             load_snapshots(args.snapshots),
+             load_epss_snapshots(args.epss) if args.epss else {},
+             load_catalog(args.kev) if args.kev else None,
+             _read_rows(args.controls) if args.controls else None,
+             date.fromisoformat(args.as_of))
+
+    def score(changed) -> dict[tuple[str, str], float]:
+        paths = {a: s.value for a, s in path_compute(changed, privileges).items()}
+        return {(e.asset, e.cve.upper()): e.score
+                for e in rank_explained(*fixed, paths) if e.score is not None}
+    return graph, score
+
+
+def _run_roi(args) -> int:
+    if not (args.assets and args.interfaces):
+        print("error: roi 需要攻擊圖輸入（--assets/--interfaces/...）——"
+              "沒有圖就量不出切掉幾條路徑", file=sys.stderr)
+        return 2
+    treatments, code = _treatments(args)
+    if treatments is None:
+        return code
     try:
-        candidates = build_candidates(
-            _read_rows(args.remediations) if args.remediations else [], weaknesses,
-            _read_rows(args.controls) if args.controls else [], rules.controls)
+        plans = _plans(args, treatments)
     except CandidateError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
-    print(candidates_report(plan_all(treatments, candidates)))
+    graph, score = _scorer(args)
+    services = {(r["asset"], r["cve"].upper()): r.get("service", "")
+                for r in _read_rows(args.scanner)}
+    result = roi_evaluate(graph, plans, score, services)
+    chosen = roi_greedy(graph, score, result, services, args.budget)
+    # Day 24 的瓶頸：每個最小切割都少不了的，加上單台切最多的可處置節點
+    chokes = analyse(graph)
+    movable = sorted((c for c in chokes.chokes if c.actionable), key=lambda c: -c.cuts)
+    targets = list(dict.fromkeys(list(chokes.universal) + [c.asset for c in movable[:2]]))
+    print(roi_render(result, roi_combined(graph, score, chosen, services), chosen,
+                     args.budget, roi_what_if(graph, score, targets)))
     return 0
 
 
@@ -788,6 +852,8 @@ def main(argv: list[str] | None = None) -> int:
         return _run_treat(args)
     if args.command == "candidates":
         return _run_candidates(args)
+    if args.command == "roi":
+        return _run_roi(args)
     if args.command == "acceptance":
         return _run_acceptance(args)
     if args.command == "graph":
