@@ -121,5 +121,5 @@ def test_dashboard_renders_without_exceptions():
 
     app = AppTest.from_file(str(ROOT / "app" / "dashboard.py"), default_timeout=180).run()
     assert not app.exception, app.exception
-    assert len(app.tabs) == 5
+    assert len(app.tabs) == 6
     assert any("CVE2Action" in t.value for t in app.title)
