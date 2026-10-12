@@ -92,12 +92,12 @@ CVE2Action 接收現有弱掃結果，再結合威脅情報、資產情境、網
 > | 2 | 多介面歸併為穩定資產 | **Day 19** | 盤點後補排 |
 > | 3 | 適用性不足標 `REVIEW_REQUIRED`／`NOT_APPLICABLE` | **Day 25** | 已完成（1 筆 NOT_APPLICABLE、30 筆待複核）|
 > | 4 | 補上 CVSS、EPSS、KEV | Day 7–10 | 已完成 |
-> | 5 | 同時呈現 CVSS 排名與本專案排名 | **Day 28／29** | 盤點後補排 |
+> | 5 | 同時呈現 CVSS 排名與本專案排名 | **Day 28／29** | ✅ 儀表板兩欄並陳；38 筆差異逐筆說明 |
 > | 6 | 每個分數說明來源、加減分與資料缺口 | Day 16 | 已完成 |
 > | 7 | 找出至少一條 Internet → Crown Jewel 路徑 | Day 22 | 已完成（30 條，最短 2 跳；Day 24 補上權限呈現） |
-> | 8 | 比較 Patch、隔離與關閉連線 | Day 26 | — |
-> | 9 | 重算措施後的分數及剩餘路徑 | Day 27 | — |
-> | 10 | 重複觀測只形成一項修補工作 | **Day 19** ＋ Day 26 | 盤點後補排 |
+> | 8 | 比較 Patch、隔離與關閉連線 | Day 26 | ✅ 先做／結案、成本與限制 |
+> | 9 | 重算措施後的分數及剩餘路徑 | Day 27 | ✅ 反事實重算；patch 切不掉路徑（已知限制） |
+> | 10 | 重複觀測只形成一項修補工作 | **Day 19** ＋ Day 26 | ✅ 歸併（Day 19）＋匯出清單（Day 28） |
 > | 11 | 可重現的安裝方式與自動測試 | 持續 | 已完成 |
 >
 > 第 5 條原文寫「CRPS 排名」。本專案輸出的是 0–10 的 Priority Score 與對外的 P0–P3 層級。
@@ -461,7 +461,7 @@ Priority Score = 10 × (0.50×S + 0.25×E + 0.25×B)
 | 27 | 用最少變更切斷最多攻擊路徑 | ✅ Remediation ROI | 比較投入與降低幅度。**反事實重算**：每項措施套到圖的複本上，路徑、A、40 筆分數整條重跑（成功標準 #9）。**降分與切路徑是兩個量、給出相反答案**（隔離跳板切 15 條只降 2.86；patch 路由器降 9.42 切 0），不合成一個 ROI。**實測**：14 項只有 1 項切得到路徑（隔離 MOVEit，2 條）；**patch 一條都切不掉**——圖模型不看漏洞，列為 v1.0 已知限制；8 小時組合佇列降 35.56、路徑 30→30；Day 24 的三個瓶頸清冊裡沒有任何措施。[ADR-day-27](docs/decisions/ADR-day-27-remediation-roi.md) |
 | 28 | 做一個主管與工程師都看得懂的儀表板 | ✅ Dashboard（`app/dashboard.py`，Streamlit＋Plotly） | 排序、說明、路徑可操作；**同一畫面並陳 CVSS 排名與本專案排名兩欄**（成功標準 #5）。五個分頁對應 §14 展示腳本八步；`app/data.py` 呼叫 CLI 同一條管線，**畫面不得有第二套算法**；CVSS 同分以並列呈現（六筆 10.0 並列第一，散到 #4–#32）；P0 計數不當頭條、降分與切路徑不合成。`scripts/capture_demo.py` 照八步截圖並組成 Demo GIF。**同日重新量測兩條到期豁免**：預測的「一批不必修離開分母」實際 1 筆，最大分級 0.5263→0.5135 仍過半，重新說明、列入 v1.0 已知限制。**§14 第 4 步劇本在資料上不成立**（CVSS 8.x 落在 #14–#30），交 Day 29。[ADR-day-28](docs/decisions/ADR-day-28-dashboard.md) |
 | 29 | 四個情境驗證：模型真的比 CVSS 排序好嗎？ | ✅ 測試報告（`docs/releases/day-29-scenario-report.md`）及 Demo GIF（`docs/images/demo/demo.gif`） | 四個必測情境**寫成查詢規則、符合的每一筆都評**：情境三 PASS（同漏洞雙胞胎，有 WAF #16、沒有 #3）、情境四 PASS（關跳板 RDP 30→15，清冊無此措施）、情境一 PARTIAL（4/5，監控主機差一名，線不事後挪）、**情境二 PARTIAL**（唯一符合的 CVSS 並列 19 → #14，未進前 9；B、T 在頂端沒有鑑別力）。對照人工排序 τ-b 本專案 0.6、只看 CVSS 0.527（5 筆、作者自評）。38 筆差異逐筆算出主因（成功標準 #5）。報告為產出物，CI 重產比對。[ADR-day-29](docs/decisions/ADR-day-29-scenarios.md) |
-| 30 | 從 CVE 堆到修補優先序 | Release v1.0.0 | 一鍵重現完整流程；**含 `Dockerfile`**（§12 盤點後補排，2026-10-11） |
+| 30 | 從 CVE 堆到修補優先序 | ✅ Release v1.0.0 | 一鍵重現完整流程；**含 `Dockerfile`**（§12 盤點後補排，2026-10-11）。作者本機沒有 Docker，**驗證放在 CI 的 `docker` job**（建置、容器內測試、容器內重產報告比對、儀表板健康檢查）。README 改為三種啟動方式＋Demo GIF＋六條已知限制；[release notes](docs/releases/v1.0.0.md) 逐條對照 §5 十一條成功標準與 §16 Day 30 門檻。**§13.3 的 tag 只建到 `v0.2.0-data`**——見 §13.3 註記 |
 
 
 > **Day 18 盤點補記（2026-10-03）**：下列三項屬於 §4.1 MVP 與 §5 成功標準，但原施工表沒有
@@ -535,7 +535,7 @@ cve2action/
 > | `tests`／`.github/workflows` | ✅ | Day 6 |
 > | `docs/architecture`／`decisions`／`articles` | ✅ | Day 6／5／1 |
 > | **`app/`**（`dashboard.py`＋`data.py`） | ✅ **2026-10-11 建立** | **Day 28** 實作 |
-> | **`Dockerfile`** | ✗ 待建 | **Day 30**（一鍵重現） |
+> | **`Dockerfile`** | ✅ 2026-10-12 | **Day 30**（一鍵重現；CI `docker` job 驗證） |
 > | ~~`src/cve2action/api/`~~ | **已從本節移除** | — |
 > | `docs/methodology/` | 刻意不做 | 保留 `docs/research/`，見 README |
 >
@@ -578,6 +578,12 @@ cve2action/
 | `v0.4.0-attack-graph` | Day 24，攻擊路徑 |
 | `v0.5.0-remediation` | Day 27，修補決策 |
 | `v1.0.0-ironman` | Day 30，最終成果 |
+
+> **Day 30 盤點（2026-10-12）：第五種盤點來源——§13 的版本里程碑。**
+> 實際只建到 `v0.2.0-data`。`v0.3.0-scoring`（Day 18）、`v0.4.0-attack-graph`（Day 24）、
+> `v0.5.0-remediation`（Day 27）三個 tag 從未建立，而沒有任何一天會因此紅燈——
+> 與 Day 24 抓到 §9.6、Day 26 抓到 §12 是同一個形狀：**寫在規格裡、沒有一天掛名負責。**
+> 補標的位置以各階段的合併 commit 為準，待作者確認後與 `v1.0.0-ironman` 一併建立。
 
 ### 13.4 決策紀錄
 

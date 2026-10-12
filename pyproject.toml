@@ -1,6 +1,6 @@
 [project]
 name = "cve2action"
-version = "0.2.0"
+version = "1.0.0"
 description = "從 CVE 堆到修補優先序：可解釋的弱點修補決策引擎（2026 iThome 鐵人賽）"
 readme = "README.md"
 requires-python = ">=3.12"
