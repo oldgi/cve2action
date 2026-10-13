@@ -583,7 +583,9 @@ cve2action/
 > 實際只建到 `v0.2.0-data`。`v0.3.0-scoring`（Day 18）、`v0.4.0-attack-graph`（Day 24）、
 > `v0.5.0-remediation`（Day 27）三個 tag 從未建立，而沒有任何一天會因此紅燈——
 > 與 Day 24 抓到 §9.6、Day 26 抓到 §12 是同一個形狀：**寫在規格裡、沒有一天掛名負責。**
-> 補標的位置以各階段的合併 commit 為準，待作者確認後與 `v1.0.0-ironman` 一併建立。
+> **✅ 2026-10-13 補標**，位置以各階段的合併 commit 為準：`v0.3.0-scoring` → `9700f17`（Merge Day 18）、
+> `v0.4.0-attack-graph` → `1baaa09`（Merge Day 22–24）、`v0.5.0-remediation` → `e24d528`（Merge Day 27），
+> 與 `v1.0.0-ironman` 一併建立。
 
 ### 13.4 決策紀錄
 
