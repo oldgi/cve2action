@@ -7,6 +7,7 @@
 ### Added
 
 - 發表紀錄：Day 26〈Patch、隔離、關閉服務，哪一個先做？〉（[articles/10424041](https://ithelp.ithome.com.tw/articles/10424041)）於 2026-10-13 發表，開場更正 Day 25 的 P0 計數（25 → 24）。
+- 發表紀錄：Day 27〈用最少變更切斷最多攻擊路徑〉（[articles/10424046](https://ithelp.ithome.com.tw/articles/10424046)）於 2026-10-13 發表。
 
 ## [1.0.0] - 2026-10-12
 
