@@ -178,6 +178,7 @@ app/                            儀表板（Day 28）：data.py 查數字（呼�
                                 dashboard.py 畫畫面、scenarios.py 四個必測情境（Day 29）
 Dockerfile                      一鍵重現（Day 30）
 scripts/capture_demo.py         照 §14 展示腳本截圖並組成 Demo GIF
+scripts/capture_cli.py          把命令列實際輸出截成文章結果圖（Day 26、27）
 scripts/scenario_report.py      產出 Day 29 測試報告（CI 重產比對）
 scripts/                        建資料集、契約驗證、展示素材與測試報告
 config/risk_rules.yaml          權重、值域、分級、控制適用範圍（production，加權相加）

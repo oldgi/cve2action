@@ -269,7 +269,7 @@ def render(report: RoiReport, plan_paths: tuple[int, float] | None = None,
            hypotheticals: list[WhatIf] | None = None) -> str:
     lines = [f"措施重算（{len(report.outcomes)} 項；通往 Crown Jewel 的路徑 "
              f"{report.paths_total} 條；佇列總分 {report.queue_total}）", ""]
-    lines.append(f"  {'措施':<34}{'工時':>5}{'切路徑':>7}{'降分':>8}{'每小時':>8}  狀態")
+    lines.append(f"  {'措施':<46}{'工時':>5}{'切路徑':>7}{'降分':>8}{'每小時':>8}  狀態")
     ordered = sorted(report.outcomes,
                      key=lambda o: (o.per_hour is None, -(o.per_hour or 0), -o.paths_cut))
     for item in ordered:
@@ -277,7 +277,7 @@ def render(report: RoiReport, plan_paths: tuple[int, float] | None = None,
         name = f"{cand.remediation_id} {cand.action} {cand.asset}"
         hours = "?" if cand.effort_hours is None else f"{cand.effort_hours:g}"
         rate = "—" if item.per_hour is None else f"{item.per_hour:.2f}"
-        lines.append(f"  {name:<34}{hours:>5}{item.paths_cut:>7}{item.score_drop:>8.2f}"
+        lines.append(f"  {name:<46}{hours:>5}{item.paths_cut:>7}{item.score_drop:>8.2f}"
                      f"{rate:>8}  {item.status}　{item.note}")
     cutters = [o for o in report.outcomes if o.paths_cut > 0]
     lines.append("")
