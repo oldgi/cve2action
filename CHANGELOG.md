@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 發表紀錄：Day 26〈Patch、隔離、關閉服務，哪一個先做？〉（[articles/10424041](https://ithelp.ithome.com.tw/articles/10424041)）於 2026-10-13 發表，開場更正 Day 25 的 P0 計數（25 → 24）。
+
 ## [1.0.0] - 2026-10-12
 
 30 天施工完成。已知限制六條，寫在 README 與 `docs/releases/v1.0.0.md`——它們跟著 v1.0 走，不是待辦。
