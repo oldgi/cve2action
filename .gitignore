@@ -12,3 +12,6 @@ dist/
 
 # Engine outputs（輸出物不進版控；展示用結果另存 docs/ 或 data/snapshots/）
 /ranked_result.csv
+
+# Claude Code 工作筆記（skill、BRIEF）是另一個 private repo，clone 在這裡
+/.claude/
